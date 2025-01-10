@@ -1,0 +1,13 @@
+[Unit]
+Description=File Organizer Daemon
+After=network.target
+
+[Service]
+Type=simple
+User=recai
+WorkingDirectory=/home/recai/Dropbox/Projects/FileOrganizer
+ExecStart=/usr/bin/python3 /home/recai/Dropbox/Projects/FileOrganizer/main.py /path/to/input/folder /path/to/output/folder gemini
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
