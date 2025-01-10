@@ -48,6 +48,7 @@ class FileRenamer:
         text = text.replace("ü", "u")
         text = text.replace("ğ", "g")
         text = text.replace("ş", "s")
+        text = text.replace(" ", "-")
         return text
 
     def sanitize_filename(self, filename):

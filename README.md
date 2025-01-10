@@ -2,10 +2,15 @@
 
 A Python package for organizing and renaming files using AI.
 
-## Installation
+## Quick Start
 
 ```bash
-pip install fileai
+git clone https://github.com/amacinho/fileai.git
+cd fileai
+pip install .
+mkdir -p ~/tmp/documents/categorized
+fileai --api-key <ADD YOUR GEMINI API KEY> --monitor ~/tmp/documents ~/tmp/documents/categorized gemini --model gemini-1.5-flash
+# fileai will start monitoring ~/tmp/documents for new files and categorize them under ~/tmp/documents/categorized.
 ```
 
 ## Configuration
@@ -18,11 +23,11 @@ FileAI requires a Gemini API key to function. You can provide your API key in on
    ```
 
 2. **Configuration File**
-   Create a JSON configuration file at `~/.config/fileai/config.json` (Linux/Mac) or `%APPDATA%\fileai\config.json` (Windows):
+   Create a JSON configuration file at `~/.fileai/config.json` (Linux/Mac) or `%APPDATA%\fileai\config.json` (Windows):
    ```json
    {
      "api_key": "your-api-key",
-     "model": "gemini-pro-vision"  // optional, defaults to "gemini-pro-vision"
+     "model": "model-name" # defaults to gemini-2.0-flash-exp
    }
    ```
 
@@ -45,6 +50,8 @@ The API key precedence is:
 ```bash
 # Basic usage
 fileai input_directory output_directory gemini
+
+
 
 # With API key provided via command line
 fileai input_directory output_directory gemini --api-key your-api-key
