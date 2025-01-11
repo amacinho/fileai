@@ -220,6 +220,17 @@ class FileOrganizer:
 
         new_file_path  = self._generate_new_file_path(current_file_path, options)
         self._save_or_skip_file(current_file_path, new_file_path)
+        
+        # Check if parent directory is empty and delete it if it's not the watch directory
+        parent_dir = current_file_path.parent
+        while parent_dir != self.input_dir_path and self._is_empty_dir(parent_dir):
+            try:
+                os.rmdir(parent_dir)
+                logging.info(f"Deleted empty directory: {parent_dir.relative_to(self.input_dir_path)}")
+                # Move up to check if parent is also empty
+                parent_dir = parent_dir.parent
+            except OSError:
+                break  # Stop if we can't remove the directory
 
     def _is_empty_dir(self, dir_path: Path) -> bool:
         """Check if a directory is empty."""
@@ -242,12 +253,6 @@ class FileOrganizer:
                         continue
 
                     self.organize_file(file_path)
-                    
-                    # Check if parent directory is empty and delete it
-                    parent_dir = file_path.parent
-                    if parent_dir != self.input_dir_path and self._is_empty_dir(parent_dir):
-                        os.rmdir(parent_dir)
-                        logging.info(f"Deleted empty directory: {parent_dir.relative_to(self.input_dir_path)}")
 
                 except NotImplementedError:
                     logging.info(

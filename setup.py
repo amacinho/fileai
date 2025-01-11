@@ -12,7 +12,7 @@ setup(
         "pillow",
         "pdf2image",
         "PyPDF2",
-        "watchdog",
+        "inotify",
     ],
     entry_points={
         "console_scripts": [

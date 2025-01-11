@@ -2,9 +2,8 @@ import argparse
 import os
 from pathlib import Path
 import logging
-import time
-from watchdog.observers.polling import PollingObserver
-from watchdog.events import FileSystemEventHandler
+import inotify.adapters
+
 from fileai.api import GeminiAPI
 from fileai.file_organizer import FileOrganizer
 from fileai.config import get_config_file
@@ -22,161 +21,80 @@ def create_api(api_type: str, api_key: str = None, model: str = None):
     else:
         raise ValueError(f"Unsupported API type: {api_type}")
 
-class FileStabilityHandler(FileSystemEventHandler):
-    def __init__(self, organizer, output_path, max_retries=3, stability_timeout=300):
-        """Initialize the handler with configurable stability parameters.
-        
-        Args:
-            organizer: FileOrganizer instance to process stable files
-            output_path: Path to output directory
-            max_retries: Maximum number of processing attempts (default: 3)
-            stability_timeout: Maximum time in seconds to wait for stability (default: 300)
-        """
-        self.organizer = organizer
-        self.output_path = Path(output_path)
-        self.max_retries = max_retries
-        self.stability_timeout = stability_timeout
-        
-        # Track file states with more metadata
-        self.tracked_files = {}  # {path: {size: int, last_modified: float, stable_count: int, retries: int, first_seen: float}}
-        self.stable_files = set()  # Successfully processed files
-        self.last_check = time.time()
-
-    def on_created(self, event):
-        """Handle file creation events."""
-        if not event.is_directory:
-            file_path = Path(event.src_path)
-            if not self.is_output_file(file_path):
-                try:
-                    current_time = time.time()
-                    self.tracked_files[str(file_path)] = {
-                        'size': os.path.getsize(file_path),
-                        'last_modified': os.path.getmtime(file_path),
-                        'stable_count': 0,
-                        'retries': 0,
-                        'first_seen': current_time
-                    }
-                    logging.debug(f"Started tracking new file: {file_path}")
-                except (FileNotFoundError, OSError) as e:
-                    logging.debug(f"Could not start tracking {file_path}: {e}")
-
-    def dispatch(self, event):
-        """Override dispatch to periodically check file stability."""
-        super().dispatch(event)
-        
-        # Check stability every second
-        current_time = time.time()
-        if current_time - self.last_check >= 1.0:
-            self.check_file_stability()
-            self.last_check = current_time
-
-    def check_file_stability(self):
-        """Check stability of tracked files and process them when ready."""
-        current_time = time.time()
-        files_to_remove = []
-
-        for file_path, metadata in list(self.tracked_files.items()):
-            if file_path in self.stable_files:
-                files_to_remove.append(file_path)
-                continue
-
-            try:
-                current_size = os.path.getsize(file_path)
-                current_mtime = os.path.getmtime(file_path)
-                
-                # Check if file has timed out
-                if current_time - metadata['first_seen'] > self.stability_timeout:
-                    logging.warning(f"File {file_path} stability timeout exceeded")
-                    files_to_remove.append(file_path)
-                    continue
-
-                # Check if file is being modified
-                if current_mtime > metadata['last_modified']:
-                    metadata.update({
-                        'size': current_size,
-                        'last_modified': current_mtime,
-                        'stable_count': 0
-                    })
-                    continue
-
-                # Check if size is stable
-                if current_size == metadata['size']:
-                    metadata['stable_count'] += 1
-                    # Consider file stable after 2 consecutive checks
-                    if metadata['stable_count'] >= 2:
-                        self._process_stable_file(file_path, metadata)
-                        if file_path in self.stable_files:
-                            files_to_remove.append(file_path)
-                else:
-                    metadata.update({
-                        'size': current_size,
-                        'last_modified': current_mtime,
-                        'stable_count': 0
-                    })
-
-            except FileNotFoundError:
-                files_to_remove.append(file_path)
-            except Exception as e:
-                logging.error(f"Error checking stability for {file_path}: {e}")
-
-        # Clean up processed or deleted files
-        for file_path in files_to_remove:
-            self.tracked_files.pop(file_path, None)
-
-    def _process_stable_file(self, file_path, metadata):
-        """Process a file that appears to be stable."""
-        try:
-            if metadata['retries'] >= self.max_retries:
-                self.stable_files.add(file_path)  # Mark as done to stop retrying
-                return
-
-            self.organizer.organize_file(file_path)
-            self.stable_files.add(file_path)
-
-        except Exception as e:
-            metadata['retries'] += 1
-            logging.warning(f"Failed to process {file_path} (attempt {metadata['retries']}): {e}")
-            # File will be retried on next stability check if retries < max_retries
-
-    def is_output_file(self, file_path):
-        """Check if a file is in the output directory."""
-        return self.output_path in file_path.parents
-
 class Monitor:
     """Monitors a directory for file changes and processes stable files."""
     
-    def __init__(self, input_path, output_path, api, poll_interval=1.0):
+    def __init__(self, input_path, output_path, api):
         """Initialize the monitor.
         
         Args:
             input_path: Path to watch for new files
             output_path: Path to output processed files
             api: API instance for processing files
-            poll_interval: How often to check for file changes in seconds
         """
         self.input_path = Path(input_path)
         self.output_path = Path(output_path)
-        self.poll_interval = poll_interval
         
         # Initialize components
         self.organizer = FileOrganizer(self.input_path, self.output_path, api)
-        self.handler = FileStabilityHandler(self.organizer, self.output_path)
-        self.observer = PollingObserver(timeout=self.poll_interval)
+        self.inotify = inotify.adapters.InotifyTree(str(self.input_path))
+        self._running = False
+        
+    def _should_process_file(self, file_path):
+        """Check if a file should be processed."""
+        path = Path(file_path)
+        # Skip files in output directory or its subdirectories
+        if self.output_path in path.parents or path == self.output_path:
+            return False
+        return True
+
+    def _process_file(self, file_path):
+        """Process a file."""
+        try:
+            if self._should_process_file(file_path):
+                self.organizer.organize_file(file_path)
+                logging.info(f"Successfully processed {file_path}")
+        except Exception as e:
+            logging.error(f"Failed to process {file_path}: {e}")
+
+    def _handle_events(self):
+        """Handle inotify events."""
+        for event in self.inotify.event_gen(yield_nones=False):
+            if not self._running:
+                break
+
+            (_, type_names, path, filename) = event
+            
+            if not filename:  # Directory event
+                continue
+                
+            # Only process files when they're completely written
+            if 'IN_CLOSE_WRITE' in type_names:
+                file_path = Path(os.path.join(path, filename))
+                self._process_file(file_path)
+
+    def process_existing_files(self):
+        """Process any existing files in the input directory."""
+        logging.info(f"Processing existing files in {self.input_path}...")
+        self.organizer.organize_directory()
+        
+    def start_monitoring(self):
+        """Start monitoring for new files."""
+        logging.info(f"Monitoring {self.input_path} for new files...")
+        self._running = True
+        self._handle_events()
         
     def start(self):
         """Start monitoring the input directory."""
         # First process any existing files
-        self.organizer.organize_directory()
+        self.process_existing_files()
         
         # Then start watching for new files
-        logging.info(f"Monitoring {self.input_path} for new files...")
-        self.observer.schedule(self.handler, str(self.input_path), recursive=True)
-        self.observer.start()
+        self.start_monitoring()
         
     def stop(self):
         """Stop monitoring the input directory."""
-        self.observer.stop()
-        self.observer.join()
+        self._running = False
 
 def main():
     parser = argparse.ArgumentParser(description="Process files using various AI APIs.")
@@ -207,14 +125,16 @@ def main():
 
     if args.monitor:
         try:
-            monitor.start()
-            while True:
-                time.sleep(1)
+            # First process existing files
+            monitor.process_existing_files()
+            
+            # Then start monitoring for new files
+            monitor.start_monitoring()
         except KeyboardInterrupt:
             monitor.stop()
     else:
         # Just process existing files without monitoring
-        monitor.organizer.organize_directory()
+        monitor.process_existing_files()
 
 if __name__ == "__main__":
     main()

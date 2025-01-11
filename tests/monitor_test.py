@@ -1,14 +1,13 @@
+import threading
+import time
 import unittest
 import tempfile
 import shutil
-import time
-import os
+import base64
 import json
-import logging
-import threading
 from pathlib import Path
 from collections import namedtuple
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 from fileai.main import Monitor
 from fileai.api import GeminiAPI
 
@@ -22,7 +21,8 @@ class MonitorTest(unittest.TestCase):
         self.output_dir = Path(self.temp_dir) / "output"
         self.watch_dir.mkdir()
         self.output_dir.mkdir()
-
+        self.pdf_base64 = "JVBERi0xLjEKJcKlwrHDqwoKMSAwIG9iagogIDw8IC9UeXBlIC9DYXRhbG9nCiAgICAgL1BhZ2VzIDIgMCBSCiAgPj4KZW5kb2JqCgoyIDAgb2JqCiAgPDwgL1R5cGUgL1BhZ2VzCiAgICAgL0tpZHMgWzMgMCBSXQogICAgIC9Db3VudCAxCiAgICAgL01lZGlhQm94IFswIDAgMzAwIDE0NF0KICA+PgplbmRvYmoKCjMgMCBvYmoKICA8PCAgL1R5cGUgL1BhZ2UKICAgICAgL1BhcmVudCAyIDAgUgogICAgICAvUmVzb3VyY2VzCiAgICAgICA8PCAvRm9udAogICAgICAgICAgIDw8IC9GMQogICAgICAgICAgICAgICA8PCAvVHlwZSAvRm9udAogICAgICAgICAgICAgICAgICAvU3VidHlwZSAvVHlwZTEKICAgICAgICAgICAgICAgICAgL0Jhc2VGb250IC9UaW1lcy1Sb21hbgogICAgICAgICAgICAgICA+PgogICAgICAgICAgID4+CiAgICAgICA+PgogICAgICAvQ29udGVudHMgNCAwIFIKICA+PgplbmRvYmoKCjQgMCBvYmoKICA8PCAvTGVuZ3RoIDU1ID4+CnN0cmVhbQogIEJUCiAgICAvRjEgMTggVGYKICAgIDAgMCBUZAogICAgKEhlbGxvIFdvcmxkKSBUagogIEVUCmVuZHN0cmVhbQplbmRvYmoKCnhyZWYKMCA1CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAxOCAwMDAwMCBuIAowMDAwMDAwMDc3IDAwMDAwIG4gCjAwMDAwMDAxNzggMDAwMDAgbiAKMDAwMDAwMDQ1NyAwMDAwMCBuIAp0cmFpbGVyCiAgPDwgIC9Sb290IDEgMCBSCiAgICAgIC9TaXplIDUKICA+PgpzdGFydHhyZWYKNTY1CiUlRU9GCg=="
+        self.png_base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z/C/HgAGgwJ/lK3Q6wAAAABJRU5ErkJggg=="
         # Mock API responses
         mock_response = Mock()
         mock_response.text = json.dumps({
@@ -42,118 +42,275 @@ class MonitorTest(unittest.TestCase):
         self.api.client.files = Mock()
         self.api.client.files.upload = Mock(return_value=UploadResponse(uri="file://output.jpg"))
         
-        # Create monitor
-        self.monitor = Monitor(self.watch_dir, self.output_dir, self.api, poll_interval=0.1)
-        self.monitor.start()
+        # Create monitor without processing existing files
+        self.monitor = Monitor(self.watch_dir, self.output_dir, self.api)
 
     def tearDown(self):
-        self.monitor.stop()
         shutil.rmtree(self.temp_dir)
 
-    def test_large_file_handling(self):
-        """Test handling of a large file being written in chunks."""
-        test_file = self.watch_dir / "large_file.dat"
+    def test_monitor_new_files(self):
+        """Test monitoring new files."""
+        # Create test files
+        data_dir = self.watch_dir / Path('afolder')
+        data_dir.mkdir()
+        png_file = data_dir / "test1.png"
+        pdf_file = data_dir / "test2.pdf"
         
-        # Create large random data
+
+        
+        # Create a new monitor instance
+        monitor = Monitor(self.watch_dir, self.output_dir, self.api)
+        # Start monitoring in a thread
+        monitor_thread = threading.Thread(target=monitor.start_monitoring)
+        monitor_thread.daemon = True  # Thread will be killed when main thread exits
+        monitor_thread.start()
+        time.sleep(1)
+        self.assertTrue(monitor._running, "Monitor should be running")
+        
+        # Store file contents before processing
+        png_data = base64.b64decode(self.png_base64)
+        pdf_data = base64.b64decode(self.pdf_base64)
+        
+        # Write files
+        with open(png_file, "wb") as f:
+            f.write(png_data)
+        with open(pdf_file, "wb") as f:
+            f.write(pdf_data)
+            
+        time.sleep(1)
+
+        # Verify files were processed to correct location
+        car_folder = self.output_dir / "car"
+        self.assertTrue(car_folder.exists(), "Car folder should be created")
+        processed_files = list(car_folder.glob("*"))
+        self.assertEqual(len(processed_files), 2, "Two files should be processed")
+
+        # Verify file contents
+        for processed_file in processed_files:
+            with open(processed_file, 'rb') as f:
+                processed_content = f.read()
+                if processed_file.name.startswith('test1'):
+                    self.assertEqual(processed_content, png_data, "PNG content mismatch")
+                elif processed_file.name.startswith('test2'):
+                    self.assertEqual(processed_content, pdf_data, "PDF content mismatch")
+
+        # Verify original files are removed
+        self.assertFalse(png_file.exists(), "Original PNG file should be removed")
+        self.assertFalse(pdf_file.exists(), "Original PDF file should be removed")
+        self.assertFalse(data_dir.exists(), "Empty data directory should be removed")
+
+        monitor.stop()
+        time.sleep(1)
+        self.assertFalse(monitor._running, "Monitor should not be running")
+        
+    def test_monitor_large_file(self):
+        """Test monitoring a large file being written in chunks."""
+        # Create test file path
+        large_file = self.watch_dir / "large_file.txt"
+        
+        # Create a new monitor instance
+        monitor = Monitor(self.watch_dir, self.output_dir, self.api)
+        # Start monitoring in a thread
+        monitor_thread = threading.Thread(target=monitor.start_monitoring)
+        monitor_thread.daemon = True  # Thread will be killed when main thread exits
+        monitor_thread.start()
+        time.sleep(1)
+        self.assertTrue(monitor._running, "Monitor should be running")
+        
+        # Generate and store file content
+        file_content = ""
         chunk_size = 1024 * 1024  # 1MB chunks
-        total_size = chunk_size * 5  # 5MB total
-        data = os.urandom(total_size)
+        num_chunks = 5    # Total 100KB
+        for i in range(num_chunks):
+            chunk = f"Chunk {i + 1} content: " + "x" * (chunk_size - 20) + "\n"
+            file_content += chunk
+            
+        # Write large file in chunks
+        with open(large_file, "w") as f:
+            for i in range(num_chunks):
+                chunk = file_content.split('\n')[i] + '\n'
+                f.write(chunk)
+                f.flush()
+                time.sleep(0.05)  # Wait between chunks
         
-        def write_chunks():
-            with open(test_file, 'wb') as f:
-                for i in range(0, total_size, chunk_size):
-                    chunk = data[i:i + chunk_size]
-                    f.write(chunk)
-                    f.flush()
-                    time.sleep(0.5)  # Simulate slow write
+        time.sleep(2)  # Give monitor time to process
         
-        # Write file in separate thread
-        writer = threading.Thread(target=write_chunks)
-        writer.start()
-        writer.join(timeout=30)
-        self.assertFalse(writer.is_alive(), "File write should complete")
-        
-        # Wait for processing with timeout
-        max_wait = 30
-        start_time = time.time()
+        # Verify files were processed to correct location
         car_folder = self.output_dir / "car"
-        
-        while time.time() - start_time < max_wait:
-            if car_folder.exists() and any(car_folder.glob("*")):
-                break
-            time.sleep(0.5)
-        
         self.assertTrue(car_folder.exists(), "Car folder should be created")
-        self.assertTrue(any(car_folder.glob("*")), "File should be moved to car folder")
-        self.api.client.models.generate_content.assert_called()
+        processed_files = list(car_folder.glob("*"))
+        self.assertEqual(len(processed_files), 1, "One file should be processed")
 
-    def test_pdf_handling(self):
-        """Test handling of a PDF file."""
-        test_file = self.watch_dir / "test.pdf"
-        
-        # Create minimal valid PDF
-        pdf_content = b'''%PDF-1.4
-1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj
-2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj
-3 0 obj<</Type/Page/MediaBox[0 0 3 3]>>endobj
-xref
-0 4
-0000000000 65535 f
-0000000009 00000 n
-0000000052 00000 n
-0000000101 00000 n
-trailer<</Size 4/Root 1 0 R>>
-startxref
-149
-%%EOF'''
-        
-        with open(test_file, 'wb') as f:
-            f.write(pdf_content)
-        
-        # Wait for processing with timeout
-        max_wait = 10
-        start_time = time.time()
-        car_folder = self.output_dir / "car"
-        
-        while time.time() - start_time < max_wait:
-            if car_folder.exists() and any(car_folder.glob("*")):
-                break
-            time.sleep(0.5)
-        
-        self.assertTrue(car_folder.exists(), "Car folder should be created")
-        moved_file = next(car_folder.glob("*"))
-        self.assertTrue(moved_file.exists(), "File should be moved to car folder")
-        self.assertIn("car-insurance", moved_file.name.lower(), "Filename should contain topic")
-        self.api.client.models.generate_content.assert_called()
+        # Verify file contents
+        processed_file = processed_files[0]
+        with open(processed_file, 'r') as f:
+            self.assertEqual(f.read(), file_content, "Content mismatch for large file")
 
-    def test_png_handling(self):
-        """Test handling of a PNG file."""
-        test_file = self.watch_dir / "test.png"
+        # Verify original file is removed
+        self.assertFalse(large_file.exists(), "Original large file should be removed")
+
+        monitor.stop()
+        time.sleep(1)
+        self.assertFalse(monitor._running, "Monitor should not be running")
         
-        # Create minimal valid PNG
-        png_content = (b'\x89PNG\r\n\x1a\n\x00\x00\x00\x0DIHDR\x00\x00\x00\x01\x00'
-                      b'\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00'
-                      b'\x0AIDAT\x08\x99c\x00\x00\x00\x02\x00\x01\xe5\x27\xde\xfc\x00'
-                      b'\x00\x00\x00IEND\xaeB`\x82')
+    def test_process_existing_files_only(self):
+        """Test processing existing files without monitoring."""
+        # Create test files
+        png_file = self.watch_dir / "test1.png"
+        pdf_file = self.watch_dir / "test2.pdf"
         
-        with open(test_file, 'wb') as f:
-            f.write(png_content)
+                # Base64-encoded 1x1 PNG image
         
-        # Wait for processing with timeout
-        max_wait = 10
-        start_time = time.time()
+
+        # Store file contents before processing
+        png_data = base64.b64decode(self.png_base64)
+        pdf_data = base64.b64decode(self.pdf_base64)
+        
+        # Write files
+        with open(png_file, "wb") as f:
+            f.write(png_data)
+        with open(pdf_file, "wb") as f:
+            f.write(pdf_data)
+            
+        # Create a new monitor instance
+        monitor = Monitor(self.watch_dir, self.output_dir, self.api)
+        
+        # Process existing files only (without starting monitoring)
+        monitor.process_existing_files()
+        
+        # Verify files were processed to correct location
         car_folder = self.output_dir / "car"
-        
-        while time.time() - start_time < max_wait:
-            if car_folder.exists() and any(car_folder.glob("*")):
-                break
-            time.sleep(0.5)
-        
         self.assertTrue(car_folder.exists(), "Car folder should be created")
-        moved_file = next(car_folder.glob("*"))
-        self.assertTrue(moved_file.exists(), "File should be moved to car folder")
-        self.assertIn("car-insurance", moved_file.name.lower(), "Filename should contain topic")
-        self.api.client.models.generate_content.assert_called()
+        processed_files = list(car_folder.glob("*"))
+        self.assertEqual(len(processed_files), 2, "Two files should be processed")
+
+        # Verify file contents
+        for processed_file in processed_files:
+            with open(processed_file, 'rb') as f:
+                processed_content = f.read()
+                if processed_file.name.startswith('test1'):
+                    self.assertEqual(processed_content, png_data, "PNG content mismatch")
+                elif processed_file.name.startswith('test2'):
+                    self.assertEqual(processed_content, pdf_data, "PDF content mismatch")
+        
+        # Verify original files are removed
+        self.assertFalse(png_file.exists(), "Original PNG file should be removed")
+        self.assertFalse(pdf_file.exists(), "Original PDF file should be removed")
+        
+        # Verify monitor is not running
+        self.assertFalse(monitor._running, "Monitor should not be running")
+
+    def test_monitor_nested_folders(self):
+        """Test monitoring files in deeply nested folders."""
+        # Create a new monitor instance and start monitoring
+        monitor = Monitor(self.watch_dir, self.output_dir, self.api)
+        monitor_thread = threading.Thread(target=monitor.start_monitoring)
+        monitor_thread.daemon = True
+        monitor_thread.start()
+        time.sleep(1)
+        self.assertTrue(monitor._running, "Monitor should be running")
+
+        # Create nested folders and file
+        level1_dir = self.watch_dir / "folder1"
+        level2_dir = level1_dir / "folder2"
+        level2_dir.mkdir(parents=True)
+        png_file = level2_dir / "test.png"
+
+        # Write test file
+        png_data = base64.b64decode(self.png_base64)
+        with open(png_file, "wb") as f:
+            f.write(png_data)
+        
+        time.sleep(1)
+
+        # Verify file was processed
+        car_folder = self.output_dir / "car"
+        self.assertTrue(car_folder.exists(), "Car folder should be created")
+        processed_files = list(car_folder.glob("*"))
+        self.assertEqual(len(processed_files), 1, "One file should be processed")
+
+        # Verify original file and folders are removed
+        self.assertFalse(png_file.exists(), "Original PNG file should be removed")
+        self.assertFalse(level2_dir.exists(), "Level 2 directory should be removed")
+        self.assertFalse(level1_dir.exists(), "Level 1 directory should be removed")
+        self.assertTrue(self.watch_dir.exists(), "Watch directory should still exist")
+
+        monitor.stop()
+        time.sleep(1)
+        self.assertFalse(monitor._running, "Monitor should not be running")
+
+    def test_monitor_mixed_files(self):
+        """Test monitoring supported and unsupported files."""
+        # Create a new monitor instance and start monitoring
+        monitor = Monitor(self.watch_dir, self.output_dir, self.api)
+        monitor_thread = threading.Thread(target=monitor.start_monitoring)
+        monitor_thread.daemon = True
+        monitor_thread.start()
+        time.sleep(1)
+        self.assertTrue(monitor._running, "Monitor should be running")
+
+        # Create test folder and files
+        test_dir = self.watch_dir / "test_folder"
+        test_dir.mkdir()
+        dat_file = test_dir / "test.dat"
+        png_file = test_dir / "test.png"
+
+        # Write test files
+        with open(dat_file, "wb") as f:
+            f.write(b"test data")
+        png_data = base64.b64decode(self.png_base64)
+        with open(png_file, "wb") as f:
+            f.write(png_data)
+        
+        time.sleep(1)
+
+        # Verify only PNG was processed
+        car_folder = self.output_dir / "car"
+        self.assertTrue(car_folder.exists(), "Car folder should be created")
+        processed_files = list(car_folder.glob("*"))
+        self.assertEqual(len(processed_files), 1, "One file should be processed")
+
+        # Verify PNG was removed but DAT remains
+        self.assertFalse(png_file.exists(), "PNG file should be removed")
+        self.assertTrue(dat_file.exists(), "DAT file should still exist")
+        self.assertTrue(test_dir.exists(), "Test directory should still exist")
+
+        monitor.stop()
+        time.sleep(1)
+        self.assertFalse(monitor._running, "Monitor should not be running")
+
+    def test_process_mixed_files_no_monitor(self):
+        """Test processing existing supported and unsupported files without monitoring."""
+        # Create test folders and files
+        folder1 = self.watch_dir / "folder1"
+        folder1.mkdir()
+        folder2 = self.watch_dir / "folder2"
+        folder2.mkdir()
+
+        dat_file = folder1 / "test.dat"
+        with open(dat_file, "wb") as f:
+            f.write(b"test data")
+
+        png_file = folder2 / "test.png"
+        png_data = base64.b64decode(self.png_base64)
+        with open(png_file, "wb") as f:
+            f.write(png_data)
+
+        # Create monitor and process existing files
+        monitor = Monitor(self.watch_dir, self.output_dir, self.api)
+        monitor.process_existing_files()
+
+        # Verify only PNG was processed
+        car_folder = self.output_dir / "car"
+        self.assertTrue(car_folder.exists(), "Car folder should be created")
+        processed_files = list(car_folder.glob("*"))
+        self.assertEqual(len(processed_files), 1, "One file should be processed")
+
+        # Verify PNG folder was removed but DAT folder remains
+        self.assertFalse(png_file.exists(), "PNG file should be removed")
+        self.assertFalse(folder2.exists(), "PNG folder should be removed")
+        self.assertTrue(dat_file.exists(), "DAT file should still exist")
+        self.assertTrue(folder1.exists(), "DAT folder should still exist")
 
 if __name__ == '__main__':
     unittest.main()
