@@ -5,3 +5,4 @@ pillow
 pdf2image
 PyPDF2
 inotify
+watchdog
