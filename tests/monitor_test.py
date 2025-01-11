@@ -211,7 +211,7 @@ class MonitorTest(unittest.TestCase):
         self.assertTrue(monitor._running, "Monitor should be running")
 
         # Create nested folders and file
-        level1_dir = self.watch_dir / "folder1"
+        level1_dir = self.watch_dir / "folder1" 
         level2_dir = level1_dir / "folder2"
         level2_dir.mkdir(parents=True)
         png_file = level2_dir / "test.png"

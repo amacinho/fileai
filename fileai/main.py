@@ -69,6 +69,7 @@ class Monitor:
                 continue
                 
             # Only process files when they're completely written
+            logging.debug(f"Received event: {type_names} on {filename}")
             if 'IN_CLOSE_WRITE' in type_names:
                 file_path = Path(os.path.join(path, filename))
                 self._process_file(file_path)
