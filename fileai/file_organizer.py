@@ -242,9 +242,12 @@ class FileOrganizer:
             return False
 
     def organize_directory(self) -> None:
-        """Organize all files in the input directory."""
+        """Organize all files in the input directory, processing deeper files first."""
         try:
-            for file_path in self.input_dir_path.rglob("*"):
+            # Get all files and sort by directory depth
+            files = list(self.input_dir_path.rglob("*"))
+            files.sort(key=lambda p: len(p.parents), reverse=True)
+            for file_path in files:
                 try:
                     # Skip directories and files in output folder
                     if file_path.is_dir() or file_path.is_relative_to(

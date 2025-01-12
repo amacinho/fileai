@@ -21,6 +21,7 @@ class FileEventHandler(FileSystemEventHandler):
     def __init__(self, watcher):
         self.watcher = watcher
         self.file_states: Dict[Path, List[FileState]] = {}
+        self.num_seen_files = 0
 
     def on_created(self, event):
         path = Path(event.src_path)
@@ -29,14 +30,20 @@ class FileEventHandler(FileSystemEventHandler):
         try:
             stats = path.stat()
             self.file_states[path] = FileState(path=path, last_modified=stats.st_mtime, size=stats.st_size)
-        except (FileNotFoundError, PermissionError):
-            pass
+            self.num_seen_files += 1
+            logging.debug(f"File created: {path}")
+        except (FileNotFoundError, PermissionError) as e:
+            logging.error(f"Error handling created file {path}: {e}")
 
     def on_modified(self, event):
         if event.is_directory:
             return
         path = Path(event.src_path)
-        self.file_states[path] = FileState(path=path, last_modified=time.time(), size=path.stat().st_size)
+        try:
+            self.file_states[path] = FileState(path=path, last_modified=time.time(), size=path.stat().st_size)
+            logging.debug(f"File modified: {path}")
+        except (FileNotFoundError, PermissionError) as e:
+            logging.error(f"Error handling modified file {path}: {e}")
 
     def on_closed(self, event):
         """Handle file close events."""
@@ -47,13 +54,21 @@ class FileEventHandler(FileSystemEventHandler):
         self._check_file_stability(path)
         
     def _get_stable_files(self):
+        """Get files that haven't been modified for 3 seconds, sorted by directory depth."""
         current_time = time.time()
-        files = []
+        stable_files = []
         for state in list(self.file_states.values()):
             if current_time - state.last_modified > 3:
-                files.append(state.path)
+                stable_files.append(state.path)
                 self.file_states.pop(state.path)
-        return files
+        # Sort files by directory depth (process deeper files first)
+        return sorted(stable_files, key=lambda p: len(p.parents), reverse=True)
+    
+    def get_num_watched_files(self):
+        return len(self.file_states)
+    
+    def get_num_seen_files(self):
+        return self.num_seen_files
 
 
 class Watcher:

@@ -1,3 +1,4 @@
+import logging
 import threading
 import time
 import unittest
@@ -6,7 +7,6 @@ import shutil
 import base64
 import json
 from pathlib import Path
-import itertools
 from collections import namedtuple
 from unittest.mock import Mock
 from fileai.watcher import Watcher
@@ -17,6 +17,16 @@ UploadResponse = namedtuple('UploadResponse', ['uri'])
 class WatcherTest(unittest.TestCase):
     def setUp(self):
         # Create temporary directories for testing
+        self.folders = [
+            "medical",
+            "financial",
+            "travel",
+            "personal",
+            "technical",
+            "legal",
+            "receipts",
+            "misc",
+        ]
         self.temp_dir = tempfile.mkdtemp()
         self.watch_dir = Path(self.temp_dir) / "watch"
         self.output_dir = Path(self.temp_dir) / "output"
@@ -57,63 +67,72 @@ class WatcherTest(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.temp_dir)
 
-    def _create_test_file(self, path: Path, file_type: str, number: int):
+    def _create_test_file(self, path: Path):
+        suffix=path.suffix[1:]       
         """Helper to create a test file with specific type and number."""
-        if file_type == 'png':
+        if suffix == 'png':
             data = base64.b64decode(self.png_base64)
-            filename = f"png{number:02d}.png"
-        elif file_type == 'pdf':
+        elif suffix == 'pdf':
             data = base64.b64decode(self.pdf_base64)
-            filename = f"pdf{number:02d}.pdf"
-        elif file_type == 'dat':
+        elif suffix == 'dat':
             data = b"test data"
-            filename = f"dat{number:02d}.dat"
         else:
-            raise ValueError(f"Unsupported file type: {file_type}")
+            raise ValueError(f"Unsupported file type: {suffix}")
         
-        file_path = path / filename
+        file_path = path 
         with open(file_path, "wb") as f:
             f.write(data)
         return file_path
+    
+    
+    def unique_categorization(self, options) -> tuple[str, str]:
+        source_file = Path(options.get("relative_file_path", ""))
+        folder = self.folders[hash(source_file) % len(self.folders)]
+        filename = f"file_{hash(source_file)}"
+        return filename, folder
 
     def _create_stress_test_structure(self, base_dir: Path):
         """Create a complex folder structure with many test files."""
         # Create root folders A
+        self.input_files = []
         for root in ['folderA']:
             root_path = base_dir / root
             root_path.mkdir()
             
-            # Create 5 files in root
-            for i in range(1, 6):
-                self._create_test_file(root_path, 'png', i)
-                self._create_test_file(root_path, 'pdf', i)
-            
-            
+            for i in range(1, 101):
+                self.input_files.append(root_path / f"png{i:02d}.png")
+                self.input_files.append(root_path / f"png{i:02d}.pdf")
+                      
             for level1 in ['folder1', 'folder2', 'folder3']:
                 level1_path = root_path / level1
-                level1_path.mkdir()
+                level1_path.mkdir()    
+                for i in range(1, 101):
+                    self.input_files.append(level1_path / f"png{i:02d}.png")
+                    self.input_files.append(level1_path / f"png{i:02d}.pdf")
                 
-                # Create 5 files in level1
-                for i in range(1, 6):
-                    self._create_test_file(level1_path, 'png', i)
-                    self._create_test_file(level1_path, 'pdf', i)
-                
-                # Create dat file in folderB/folder1
-                if level1 == 'folder1':
-                    self._create_test_file(level1_path, 'dat', 1)
-
                 for level2 in ['foldera', 'folderb', 'folderc']:
                     level2_path = level1_path / level2
                     level2_path.mkdir()
+                    for i in range(1, 101):
+                        self.input_files.append(level1_path / f"png{i:02d}.png")
+                        self.input_files.append(level1_path / f"png{i:02d}.pdf")
                     
-                    # Create 5 files in level2
-                    for i in range(1, 6):
-                        self._create_test_file(level2_path, 'png', i)
-                        self._create_test_file(level2_path, 'pdf', i)
-                    
-                    # Create dat file in folderA/folder1/foldera
-                    if root == 'folderA' and level1 == 'folder1' and level2 == 'foldera':
-                        self._create_test_file(level2_path, 'dat', 1)
+        self.input_files.append(
+            base_dir / root / "folder1" / "foldera/dat01.dat")
+        self.input_files.append(
+            base_dir / root / "folder3" / "at01.dat")
+        
+        # Store folders that needs to be kept:
+        self.folders_to_be_kept = {
+            base_dir / "folderA" / "folder1" / "foldera",
+            base_dir / "folderA" / "folder1",
+            base_dir / "folderA" / "folder3",
+            base_dir / "folderA",
+        }
+
+        # Create files
+        for file in self.input_files:
+            self._create_test_file(file)
 
     def test_watcher_new_files(self):
         """Test monitoring new files."""
@@ -386,29 +405,28 @@ class WatcherTest(unittest.TestCase):
             # Create a new watcher instance with unique hash mock
             watcher = Watcher(self.watch_dir, self.output_dir, self.api)
             
-            # Mock categorize_file to return random folders and unique filenames
-            folders = ['medical', 'financial', 'travel', 'personal', 'technical', 'legal', 'receipts', 'misc']
-            def unique_categorization(options):
-                self.hash_counter += 1
-                folder = folders[self.hash_counter % len(folders)]
-                filename = f"file_{self.hash_counter}"
-                return filename, folder
-            watcher.organizer.file_renamer.categorize_file = Mock(side_effect=unique_categorization)
+            watcher.organizer.file_renamer.categorize_file = Mock(side_effect=self.unique_categorization)
             
             # Start monitoring in a thread
             monitor_thread = threading.Thread(target=watcher.start_monitoring)
             monitor_thread.daemon = True
             monitor_thread.start()
-            time.sleep(1)
+            time.sleep(1)  
             self.assertTrue(watcher._running, "Watcher should be running")
-            
+
             # Copy entire structure to watch directory
             for item in stress_dir.iterdir():
                 shutil.copytree(item, self.watch_dir / item.name)
-            
             # Wait for processing
-            time.sleep(60)
-            
+            logging.info(
+                f"Files remaining: {watcher.event_handler.get_num_watched_files()}. Files seen: {watcher.event_handler.get_num_seen_files()}"
+            )
+            while watcher.event_handler.get_num_watched_files() > 0:
+                logging.info(f"Files remaining: {watcher.event_handler.get_num_watched_files()}. Files seen: {watcher.event_handler.get_num_seen_files()}")
+                time.sleep(2)
+            logging.info(
+                f"Files remaining: {watcher.event_handler.get_num_watched_files()}. Files seen: {watcher.event_handler.get_num_seen_files()}"
+            )
             # Verify all PNG and PDF files are processed
             # Count total processed files across all output folders
             processed_files = []
@@ -418,48 +436,21 @@ class WatcherTest(unittest.TestCase):
                 if folder_path.exists():
                     processed_files.extend(list(folder_path.glob("*")))
             
-            # Calculate expected number of files (only PNG and PDF files)
-            # In folderA:
-            # - 5 files (PNG) + 5 files (PDF) in root = 10 files
-            # - 3 subfolders * (5 PNG + 5 PDF) = 30 files
-            # - 3 subfolders * 3 subsubfolders * (5 PNG + 5 PDF) = 90 files
-            # Total: 130 files
-            expected_files = 130
-            self.assertEqual(len(processed_files), expected_files,
-                           f"Expected {expected_files} processed files")
-            
-            # Verify files are distributed across folders
-            files_per_folder = {folder: len(list((self.output_dir / folder).glob("*")))
-                              for folder in folders if (self.output_dir / folder).exists()}
-            self.assertTrue(all(count > 0 for count in files_per_folder.values()),
-                          "Files should be distributed across folders")
-            
-            # Verify folders with dat files still exist
-            self.assertTrue((self.watch_dir / "folderA" / "folder1" / "foldera").exists(),
-                          "folderA/folder1/foldera should exist (contains dat file)")
-            self.assertTrue((self.watch_dir / "folderB" / "folder1").exists(),
-                          "folderB/folder1 should exist (contains dat file)")
-            self.assertTrue((self.watch_dir / "folderC").exists(),
-                          "folderC should exist (contains dat file)")
-            
-            # Verify dat files still exist
-            self.assertTrue((self.watch_dir / "folderA" / "folder1" / "foldera" / "dat01.dat").exists(),
-                          "dat file in folderA/folder1/foldera should exist")
-            self.assertTrue((self.watch_dir / "folderB" / "folder1" / "dat01.dat").exists(),
-                          "dat file in folderB/folder1 should exist")
-            self.assertTrue((self.watch_dir / "folderC" / "dat01.dat").exists(),
-                          "dat file in folderC should exist")
-            
+            for file in self.input_files:
+                filename, folder = self.unique_categorization({"relative_file_path": file})
+                if file.suffix in ['png', 'pdf']:
+                    self.assertTrue(Path(self.output_dir / folder / filename).exists(), 'Supported file should exist in output')
+                    self.assertFalse(file.exists(), 'Supported file should not exist in inbox')
+                if file.suffix == 'dat':
+                    self.assertFalse(Path(self.output_dir / folder / filename).exists(), 'Unsupported file should exist in output')
+                    self.assertTrue(file.exists(), 'Unsupported file should still exist in inbox')
+ 
             # Verify other folders are removed
-            self.assertFalse((self.watch_dir / "folderA" / "folder2").exists(),
-                           "folderA/folder2 should be removed")
-            self.assertFalse((self.watch_dir / "folderA" / "folder3").exists(),
-                           "folderA/folder3 should be removed")
-            self.assertFalse((self.watch_dir / "folderB" / "folder2").exists(),
-                           "folderB/folder2 should be removed")
-            self.assertFalse((self.watch_dir / "folderB" / "folder3").exists(),
-                           "folderB/folder3 should be removed")
-
+            for path in self.input_files:
+                filename, folder = self.unique_categorization({"relative_file_path": path})
+                path = Path(self.output_dir / folder)
+                if path not in self.folders_to_be_kept:
+                    self.assertFalse(path.exists(), f"Folder {path} should be removed")
             watcher.stop()
             time.sleep(1)
             self.assertFalse(watcher._running, "Watcher should not be running")
