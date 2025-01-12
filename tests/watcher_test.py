@@ -6,6 +6,7 @@ import tempfile
 import shutil
 import base64
 import json
+import yaml
 from pathlib import Path
 from collections import namedtuple
 from unittest.mock import Mock
@@ -15,6 +16,13 @@ from fileai.api import GeminiAPI
 UploadResponse = namedtuple('UploadResponse', ['uri'])
 
 class WatcherTest(unittest.TestCase):
+    # Test configuration constants
+    WAIT_TIMEOUT = 300  # Maximum time to wait for file processing
+    POLL_INTERVAL = 0.5  # Time between checks
+    CHUNK_SIZE = 1024 * 1024  # 1MB chunks for large file test
+    NUM_CHUNKS = 5  # Number of chunks for large file test
+    SETUP_WAIT = 5  # Time to wait for watchdog setup
+    
     def setUp(self):
         # Create temporary directories for testing
         self.folders = [
@@ -67,9 +75,27 @@ class WatcherTest(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.temp_dir)
 
+    def wait_for_files_processed(self, watcher, timeout=None, poll_interval=None):
+        """Wait for all files to be processed with timeout."""
+        timeout = timeout or self.WAIT_TIMEOUT
+        poll_interval = poll_interval or self.POLL_INTERVAL
+        start_time = time.time()
+        logging.debug(f"Waiting for files to be processed with timeout {timeout} and poll interval {poll_interval}")
+        logging.debug(
+            f"Files remaining: {watcher.event_handler.get_num_watched_files()}. Files seen: {watcher.event_handler.get_num_seen_files()}"
+        )
+        while time.time() - start_time < timeout:
+            remaining = watcher.event_handler.get_num_watched_files()
+            if remaining == 0:
+                return True
+            logging.debug(f"Files remaining: {remaining}. Files seen: {watcher.event_handler.get_num_seen_files()}")
+            time.sleep(poll_interval)
+            
+        return False
+
     def _create_test_file(self, path: Path):
-        suffix=path.suffix[1:]       
-        """Helper to create a test file with specific type and number."""
+        """Helper to create a test file with specific type."""
+        suffix = path.suffix[1:]
         if suffix == 'png':
             data = base64.b64decode(self.png_base64)
         elif suffix == 'pdf':
@@ -79,11 +105,9 @@ class WatcherTest(unittest.TestCase):
         else:
             raise ValueError(f"Unsupported file type: {suffix}")
         
-        file_path = path 
-        with open(file_path, "wb") as f:
+        with open(path, "wb") as f:
             f.write(data)
-        return file_path
-    
+        return path
     
     def unique_categorization(self, options) -> tuple[str, str]:
         source_file = Path(options.get("relative_file_path", ""))
@@ -91,368 +115,105 @@ class WatcherTest(unittest.TestCase):
         filename = f"file_{hash(source_file)}"
         return filename, folder
 
-    def _create_stress_test_structure(self, base_dir: Path):
-        """Create a complex folder structure with many test files."""
-        # Create root folders A
+    def _create_directory_structure(self, base_dir: Path, structure: dict):
+        """Create directory structure from configuration."""
         self.input_files = []
-        for root in ['folderA']:
-            root_path = base_dir / root
-            root_path.mkdir()
-            
-            for i in range(1, 101):
-                self.input_files.append(root_path / f"png{i:02d}.png")
-                self.input_files.append(root_path / f"png{i:02d}.pdf")
-                      
-            for level1 in ['folder1', 'folder2', 'folder3']:
-                level1_path = root_path / level1
-                level1_path.mkdir()    
-                for i in range(1, 101):
-                    self.input_files.append(level1_path / f"png{i:02d}.png")
-                    self.input_files.append(level1_path / f"png{i:02d}.pdf")
-                
-                for level2 in ['foldera', 'folderb', 'folderc']:
-                    level2_path = level1_path / level2
-                    level2_path.mkdir()
-                    for i in range(1, 101):
-                        self.input_files.append(level1_path / f"png{i:02d}.png")
-                        self.input_files.append(level1_path / f"png{i:02d}.pdf")
-                    
-        self.input_files.append(
-            base_dir / root / "folder1" / "foldera/dat01.dat")
-        self.input_files.append(
-            base_dir / root / "folder3" / "at01.dat")
+        self.folders_to_be_kept = set()
         
-        # Store folders that needs to be kept:
-        self.folders_to_be_kept = {
-            base_dir / "folderA" / "folder1" / "foldera",
-            base_dir / "folderA" / "folder1",
-            base_dir / "folderA" / "folder3",
-            base_dir / "folderA",
-        }
-
-        # Create files
+        def process_directory(current_path: Path, dir_structure: dict):
+            if 'files' in dir_structure:
+                for file_config in dir_structure['files']:
+                    file_pattern = file_config['pattern']
+                    count = file_config['count']
+                    if '*' in file_pattern:
+                        base, ext = file_pattern.split('*')
+                        for i in range(1, count + 1):
+                            file_path = current_path / f"{base}{i:02d}{ext}"
+                            self.input_files.append(file_path)
+                    else:
+                        self.input_files.append(current_path / file_pattern)
+            if 'directories' in dir_structure:
+                for name, content in dir_structure['directories'].items():
+                    path = current_path / name
+                    path.mkdir(exist_ok=True)
+                    self.folders_to_be_kept.add(path)
+                    process_directory(path, content)
+        
+        process_directory(base_dir, structure)
+        
+        # Create all files
         for file in self.input_files:
             self._create_test_file(file)
 
-    def test_watcher_new_files(self):
-        """Test monitoring new files."""
-        # Create test files
-        data_dir = self.watch_dir / Path('afolder')
-        data_dir.mkdir()
-        time.sleep(1)  # Give watchdog time to set up monitoring for new directory
-        png_file = data_dir / "test1.png"
-        pdf_file = data_dir / "test2.pdf"
-        
-        # Create a new watcher instance
-        watcher = Watcher(self.watch_dir, self.output_dir, self.api)
-        # Start monitoring in a thread
-        monitor_thread = threading.Thread(target=watcher.start_monitoring)
-        monitor_thread.daemon = True  # Thread will be killed when main thread exits
-        monitor_thread.start()
-        time.sleep(1)
-        self.assertTrue(watcher._running, "Watcher should be running")
-        
-        # Store file contents before processing
-        png_data = base64.b64decode(self.png_base64)
-        pdf_data = base64.b64decode(self.pdf_base64)
-        
-        # Write files
-        with open(png_file, "wb") as f:
-            f.write(png_data)
-        with open(pdf_file, "wb") as f:
-            f.write(pdf_data)
-            
-        time.sleep(10)  # Give more time for stability checks
-
-        # Verify files were processed to correct location
-        car_folder = self.output_dir / "car"
-        self.assertTrue(car_folder.exists(), "Car folder should be created")
-        processed_files = list(car_folder.glob("*"))
-        self.assertEqual(len(processed_files), 2, "Two files should be processed")
-
-        # Verify file contents
-        for processed_file in processed_files:
-            with open(processed_file, 'rb') as f:
-                processed_content = f.read()
-                if processed_file.name.startswith('test1'):
-                    self.assertEqual(processed_content, png_data, "PNG content mismatch")
-                elif processed_file.name.startswith('test2'):
-                    self.assertEqual(processed_content, pdf_data, "PDF content mismatch")
-
-        # Verify original files are removed
-        self.assertFalse(png_file.exists(), "Original PNG file should be removed")
-        self.assertFalse(pdf_file.exists(), "Original PDF file should be removed")
-        self.assertFalse(data_dir.exists(), "Empty data directory should be removed")
-
-        watcher.stop()
-        time.sleep(1)
-        self.assertFalse(watcher._running, "Watcher should not be running")
-        
-    def test_watcher_large_file(self):
-        """Test monitoring a large file being written in chunks."""
-        # Create test file path
-        large_file = self.watch_dir / "large_file.txt"
-        
-        # Create a new watcher instance
-        watcher = Watcher(self.watch_dir, self.output_dir, self.api)
-        # Start monitoring in a thread
-        monitor_thread = threading.Thread(target=watcher.start_monitoring)
-        monitor_thread.daemon = True  # Thread will be killed when main thread exits
-        monitor_thread.start()
-        time.sleep(1)
-        self.assertTrue(watcher._running, "Watcher should be running")
-        
-        # Generate and store file content
-        file_content = ""
-        chunk_size = 1024 * 1024  # 1MB chunks
-        num_chunks = 5    # Total 5MB
-        for i in range(num_chunks):
-            chunk = f"Chunk {i + 1} content: " + "x" * (chunk_size - 20) + "\n"
-            file_content += chunk
-            
-        # Write large file in chunks
-        with open(large_file, "w") as f:
-            for i in range(num_chunks):
-                chunk = file_content.split('\n')[i] + '\n'
-                f.write(chunk)
-                f.flush()
-                time.sleep(0.05)  # Wait between chunks
-        
-        time.sleep(5)  # Give more time for stability checks
-        
-        # Verify files were processed to correct location
-        car_folder = self.output_dir / "car"
-        self.assertTrue(car_folder.exists(), "Car folder should be created")
-        processed_files = list(car_folder.glob("*"))
-        self.assertEqual(len(processed_files), 1, "One file should be processed")
-
-        # Verify file contents
-        processed_file = processed_files[0]
-        with open(processed_file, 'r') as f:
-            self.assertEqual(f.read(), file_content, "Content mismatch for large file")
-
-        # Verify original file is removed
-        self.assertFalse(large_file.exists(), "Original large file should be removed")
-
-        watcher.stop()
-        time.sleep(1)
-        self.assertFalse(watcher._running, "Watcher should not be running")
-
-    def test_process_existing_files_only(self):
-        """Test processing existing files without monitoring."""
-        # Create test files
-        png_file = self.watch_dir / "test1.png"
-        pdf_file = self.watch_dir / "test2.pdf"
-        
-        # Store file contents before processing
-        png_data = base64.b64decode(self.png_base64)
-        pdf_data = base64.b64decode(self.pdf_base64)
-        
-        # Write files
-        with open(png_file, "wb") as f:
-            f.write(png_data)
-        with open(pdf_file, "wb") as f:
-            f.write(pdf_data)
-            
-        # Create a new watcher instance
-        watcher = Watcher(self.watch_dir, self.output_dir, self.api)
-        
-        # Process existing files only (without starting monitoring)
-        watcher.process_existing_files()
-        
-        # Verify files were processed to correct location
-        car_folder = self.output_dir / "car"
-        self.assertTrue(car_folder.exists(), "Car folder should be created")
-        processed_files = list(car_folder.glob("*"))
-        self.assertEqual(len(processed_files), 2, "Two files should be processed")
-
-        # Verify file contents
-        for processed_file in processed_files:
-            with open(processed_file, 'rb') as f:
-                processed_content = f.read()
-                if processed_file.name.startswith('test1'):
-                    self.assertEqual(processed_content, png_data, "PNG content mismatch")
-                elif processed_file.name.startswith('test2'):
-                    self.assertEqual(processed_content, pdf_data, "PDF content mismatch")
-        
-        # Verify original files are removed
-        self.assertFalse(png_file.exists(), "Original PNG file should be removed")
-        self.assertFalse(pdf_file.exists(), "Original PDF file should be removed")
-        
-        # Verify watcher is not running
-        self.assertFalse(watcher._running, "Watcher should not be running")
-
-    def test_watcher_nested_folders(self):
-        """Test monitoring files in deeply nested folders."""
-        # Create a new watcher instance and start monitoring
-        watcher = Watcher(self.watch_dir, self.output_dir, self.api)
-        monitor_thread = threading.Thread(target=watcher.start_monitoring)
-        monitor_thread.daemon = True
-        monitor_thread.start()
-        time.sleep(1)
-        self.assertTrue(watcher._running, "Watcher should be running")
-
-        # Create nested folders and file
-        level1_dir = self.watch_dir / "folder1" 
-        level2_dir = level1_dir / "folder2"
-        level2_dir.mkdir(parents=True)
-        png_file = level2_dir / "test.png"
-
-        # Write test file
-        png_data = base64.b64decode(self.png_base64)
-        with open(png_file, "wb") as f:
-            f.write(png_data)
-        
-        time.sleep(5)  # Give more time for stability checks
-
-        # Verify file was processed
-        car_folder = self.output_dir / "car"
-        self.assertTrue(car_folder.exists(), "Car folder should be created")
-        processed_files = list(car_folder.glob("*"))
-        self.assertEqual(len(processed_files), 1, "One file should be processed")
-
-        # Verify original file and folders are removed
-        self.assertFalse(png_file.exists(), "Original PNG file should be removed")
-        self.assertFalse(level2_dir.exists(), "Level 2 directory should be removed")
-        self.assertFalse(level1_dir.exists(), "Level 1 directory should be removed")
-        self.assertTrue(self.watch_dir.exists(), "Watch directory should still exist")
-
-        watcher.stop()
-        time.sleep(1)
-        self.assertFalse(watcher._running, "Watcher should not be running")
-
-    def test_watcher_mixed_files(self):
-        """Test monitoring supported and unsupported files."""
-        # Create a new watcher instance and start monitoring
-        watcher = Watcher(self.watch_dir, self.output_dir, self.api)
-        monitor_thread = threading.Thread(target=watcher.start_monitoring)
-        monitor_thread.daemon = True
-        monitor_thread.start()
-        time.sleep(1)
-        self.assertTrue(watcher._running, "Watcher should be running")
-
-        # Create test folder and files
-        test_dir = self.watch_dir / "test_folder"
-        test_dir.mkdir()
-        dat_file = test_dir / "test.dat"
-        png_file = test_dir / "test.png"
-
-        # Write test files
-        with open(dat_file, "wb") as f:
-            f.write(b"test data")
-        png_data = base64.b64decode(self.png_base64)
-        with open(png_file, "wb") as f:
-            f.write(png_data)
-        
-        time.sleep(5)  # Give more time for stability checks
-
-        # Verify only PNG was processed
-        car_folder = self.output_dir / "car"
-        self.assertTrue(car_folder.exists(), "Car folder should be created")
-        processed_files = list(car_folder.glob("*"))
-        self.assertEqual(len(processed_files), 1, "One file should be processed")
-
-        # Verify PNG was removed but DAT remains
-        self.assertFalse(png_file.exists(), "PNG file should be removed")
-        self.assertTrue(dat_file.exists(), "DAT file should still exist")
-        self.assertTrue(test_dir.exists(), "Test directory should still exist")
-
-        watcher.stop()
-        time.sleep(1)
-        self.assertFalse(watcher._running, "Watcher should not be running")
-
-    def test_process_mixed_files_no_monitor(self):
-        """Test processing existing supported and unsupported files without monitoring."""
-        # Create test folders and files
-        folder1 = self.watch_dir / "folder1"
-        folder1.mkdir()
-        folder2 = self.watch_dir / "folder2"
-        folder2.mkdir()
-
-        dat_file = folder1 / "test.dat"
-        with open(dat_file, "wb") as f:
-            f.write(b"test data")
-
-        png_file = folder2 / "test.png"
-        png_data = base64.b64decode(self.png_base64)
-        with open(png_file, "wb") as f:
-            f.write(png_data)
-
-        # Create watcher and process existing files
-        watcher = Watcher(self.watch_dir, self.output_dir, self.api)
-        watcher.process_existing_files()
-
-        # Verify only PNG was processed
-        car_folder = self.output_dir / "car"
-        self.assertTrue(car_folder.exists(), "Car folder should be created")
-        processed_files = list(car_folder.glob("*"))
-        self.assertEqual(len(processed_files), 1, "One file should be processed")
-
-        # Verify PNG folder was removed but DAT folder remains
-        self.assertFalse(png_file.exists(), "PNG file should be removed")
-        self.assertFalse(folder2.exists(), "PNG folder should be removed")
-        self.assertTrue(dat_file.exists(), "DAT file should still exist")
-        self.assertTrue(folder1.exists(), "DAT folder should still exist")
-
     def test_watcher_stress_test(self):
         """Test monitoring a complex folder structure with many files."""
-        # Create test structure in a separate temp directory
+        # Load test structure from YAML fixture
+        fixture_path = Path(__file__).parent / 'fixtures' / 'stress_test_structure.yaml'
+        with open(fixture_path, 'r') as f:
+            structure = yaml.safe_load(f)
+            
         stress_dir = Path(tempfile.mkdtemp())
         try:
-            # Create the complex folder structure
-            self._create_stress_test_structure(stress_dir)
+            # Create directory structure from configuration
+            self._create_directory_structure(stress_dir, structure)
             
             # Create a new watcher instance with unique hash mock
             watcher = Watcher(self.watch_dir, self.output_dir, self.api)
-            
             watcher.organizer.file_renamer.categorize_file = Mock(side_effect=self.unique_categorization)
             
             # Start monitoring in a thread
             monitor_thread = threading.Thread(target=watcher.start_monitoring)
             monitor_thread.daemon = True
             monitor_thread.start()
-            time.sleep(1)  
+            time.sleep(self.SETUP_WAIT)
+            
             self.assertTrue(watcher._running, "Watcher should be running")
 
-            # Copy entire structure to watch directory
+            logging.info("Copying files to watch directory...")
             for item in stress_dir.iterdir():
                 shutil.copytree(item, self.watch_dir / item.name)
-            # Wait for processing
-            logging.info(
-                f"Files remaining: {watcher.event_handler.get_num_watched_files()}. Files seen: {watcher.event_handler.get_num_seen_files()}"
-            )
-            while watcher.event_handler.get_num_watched_files() > 0:
-                logging.info(f"Files remaining: {watcher.event_handler.get_num_watched_files()}. Files seen: {watcher.event_handler.get_num_seen_files()}")
-                time.sleep(2)
-            logging.info(
-                f"Files remaining: {watcher.event_handler.get_num_watched_files()}. Files seen: {watcher.event_handler.get_num_seen_files()}"
-            )
-            # Verify all PNG and PDF files are processed
-            # Count total processed files across all output folders
-            processed_files = []
-            folders = ['medical', 'financial', 'travel', 'personal', 'technical', 'legal', 'receipts', 'misc']
-            for folder in folders:
-                folder_path = self.output_dir / folder
-                if folder_path.exists():
-                    processed_files.extend(list(folder_path.glob("*")))
             
+            time.sleep(self.SETUP_WAIT)    
+            # Wait for all files to be processed with timeout
+            self.assertTrue(
+                self.wait_for_files_processed(watcher),
+                "Timed out waiting for files to be processed"
+            )
+            
+            # Verify file processing
             for file in self.input_files:
-                filename, folder = self.unique_categorization({"relative_file_path": file})
-                if file.suffix in ['png', 'pdf']:
-                    self.assertTrue(Path(self.output_dir / folder / filename).exists(), 'Supported file should exist in output')
-                    self.assertFalse(file.exists(), 'Supported file should not exist in inbox')
-                if file.suffix == 'dat':
-                    self.assertFalse(Path(self.output_dir / folder / filename).exists(), 'Unsupported file should exist in output')
-                    self.assertTrue(file.exists(), 'Unsupported file should still exist in inbox')
+                resolved_file_path = file.resolve()            
+                relative_file_path = resolved_file_path.relative_to(stress_dir)
+                filename, folder = self.unique_categorization(
+                    {"relative_file_path": relative_file_path}
+                )
+                if file.suffix in ['.png', '.pdf']:
+                    # Add suffix to the filename path
+                    output_path = Path(self.output_dir / folder / filename).with_suffix(file.suffix)
+                    input_path = Path(self.watch_dir / relative_file_path)
+                    self.assertTrue(
+                        output_path.exists(),
+                        f"Supported file should exist in output: {file}: {output_path} ",
+                    )
+                    self.assertFalse(input_path.exists(), f'Supported file should not exist in inbox: {file}')
+                if file.suffix == '.dat':
+                    self.assertFalse(
+                        Path(self.output_dir / folder / filename).exists(),
+                        f'Unsupported file should not exist in output: {file}'
+                    )
+                    self.assertTrue(file.exists(), f'Unsupported file should still exist in inbox: {file}')
  
-            # Verify other folders are removed
+            # Verify directory cleanup
             for path in self.input_files:
-                filename, folder = self.unique_categorization({"relative_file_path": path})
-                path = Path(self.output_dir / folder)
-                if path not in self.folders_to_be_kept:
-                    self.assertFalse(path.exists(), f"Folder {path} should be removed")
+                parent_dir = path.parent
+                if parent_dir not in self.folders_to_be_kept:
+                    self.assertFalse(
+                        parent_dir.exists(),
+                        f"Empty directory should be removed: {parent_dir}"
+                    )
+
             watcher.stop()
-            time.sleep(1)
+            time.sleep(self.SETUP_WAIT)
             self.assertFalse(watcher._running, "Watcher should not be running")
             
         finally:

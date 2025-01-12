@@ -4,5 +4,5 @@ python-dotenv
 pillow
 pdf2image
 PyPDF2
-inotify
 watchdog
+PyYAML

@@ -113,10 +113,7 @@ class FileOrganizer:
             return None
 
         try:
-            resolved_file_path = file_path.resolve()
-            logging.debug(f"Resolved file path: {resolved_file_path}")
-            logging.debug(f"Input directory path: {self.input_dir_path}")
-            
+            resolved_file_path = file_path.resolve()            
             try:
                 relative_file_path = resolved_file_path.relative_to(self.input_dir_path)
             except ValueError:

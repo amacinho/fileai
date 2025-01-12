@@ -1,0 +1,50 @@
+# Test directory structure for stress testing file watcher
+directories:
+  folderA:
+    files:
+      - pattern: png*.png
+        count: 1
+      - pattern: pdf*.pdf
+        count: 1000
+    directories:
+      folder1:
+        files:
+          - pattern: png*.png
+            count: 1000
+          - pattern: pdf*.pdf
+            count: 10000
+        directories:
+          foldera:
+            files:
+              - pattern: png*.png
+                count: 1
+              - pattern: pdf*.pdf
+                count: 1
+              - pattern: dat*.dat
+                count: 0
+          folderb:
+            files:
+              - pattern: png*.png
+                count: 1
+              - pattern: pdf*.pdf
+                count: 0
+          folderc:
+            files:
+              - pattern: png*.png
+                count: 0
+              - pattern: pdf*.pdf
+                count: 1
+      folder2:
+        files:
+          - pattern: png*.png
+            count: 1
+          - pattern: pdf*.pdf
+            count: 1
+      folder3:
+        files:
+          - pattern: png*.png
+            count: 1
+          - pattern: pdf*.pdf
+            count: 1
+          - pattern: at*.dat
+            count: 100
