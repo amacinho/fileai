@@ -1,0 +1,6 @@
+# Test directory structure for stress testing file watcher
+directories:
+  folderA:
+    files:
+      - pattern: png*.png
+        count: 1

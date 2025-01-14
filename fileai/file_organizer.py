@@ -190,16 +190,10 @@ class FileOrganizer:
                 current_file_name=current_file_path,
                 new_file_name=new_file_path,
             )
-            try:
-                relative_current_file_path = current_file_path.relative_to(self.input_dir_path)
-            except ValueError:
-                relative_current_file_path = current_file_path
-                
-            try:
-                relative_new_file_path = new_file_path.relative_to(self.output_dir_path)
-            except ValueError:
-                relative_new_file_path = new_file_path
-            logging.info(f"Renamed: {relative_current_file_path} to {relative_new_file_path}")
+            relative_current_file_path = current_file_path.relative_to(self.input_dir_path)
+            relative_new_file_path = new_file_path.relative_to(self.output_dir_path)
+            
+            logging.debug(f"Renamed: {relative_current_file_path} to {relative_new_file_path}")
         except FileExistsError:
             try:
                 relative_path = current_file_path.relative_to(self.input_dir_path)
