@@ -98,6 +98,23 @@ SUPPORTED_EXTENSIONS = (
     | SUPPORTED_DOC_EXTENSIONS
 )
 
+# Folder configuration - tuples of (folder_name, description)
+FOLDERS = [
+    ("medical", "Medical documents, prescriptions, treatment records"),
+    ("financial", "Bank statements, invoices, payments, transfers"),
+    ("travel", "Travel itineraries, tickets, and reservations"),
+    ("personal", "Personal documents and private files"),
+    ("technical", "Technical documentation and manuals"),
+    ("car", "Car related documents, tickets, fines, insurance"),
+    ("home", "Mortgage, rent, utilities, and home insurance"),
+    ("receipts", "Purchase receipts and invoices"),
+    ("work", "Employment contracts, pay slips, work-related documents"),
+    ("education", "School records, diplomas, certificates, transcripts"),
+    ("tax", "Tax returns, tax-related documents"),
+    ("government", "Government-issued documents, IDs, passports"),
+    ("misc", "Miscellaneous uncategorized documents"),
+]
+
 class Asset:
     """Image/Doc or PDF asset to be processed."""
 
@@ -140,45 +157,14 @@ Process:
     
     use kebap-case in all your responses (lowercase with hyphens) and avoid using special characters or spaces. limit to ascii, digits and hypen.
     
-    Files should be organized into the following categories based on content. Use the keywords gıven below as suggestions. You can return other keywords as well.
+    Files should be organized into the following categories based on content. You can return other keywords as well.
 
-    medical/
-    - Medical documents, prescriptions, treatment records
-    - Keywords: prescription, hospital, medical, augmentin, treatment, doctor, health
-
-    financial/
-    - Bank statements, invoices, payments, transfers
-    - Keywords: bank, statement, invoice, fattura, payment, bonifico, transfer
-
-    travel/
-    - Boarding passes, flight documents
-    - Keywords: boarding, flight, airlines, travel
-
-    personal/
-    - Letters, family documents, certificates
-    - Keywords: letter, family, certificate, residence
-
-    home/
-    - Mortgage, rent, etc.
-    - Keywords: mortgage, rent, lease, utilities, electricity, gas, water, internet, phone, mobile, gas, electricity, water, internet, phone, mobile
-
-    car/
-    - Car related documents, tickets, fines, insurance
-    - Keywords: ticket, multa, fine, traffic, car, insurance
-
-    technical/
-    - Hardware specifications, setup instructions
-    - Keywords: hardware, router, computer, specification, setup
-
-    legal/
-    - Contracts, agreements, registrations
-    - Keywords: contract, agreement, registration
-
-    receipts/
-    - Receipts and transaction records
-    - Keywords: receipt, estratto
-
-    misc/
-    - Uncategorized documents
-    - Default category when no other category matches
+{folders_list}
 """
+
+def generate_folders_list():
+    """Generate formatted string of folders and their descriptions"""
+    return "\n".join(
+        f"    {folder}/\n    - {description}\n"
+        for folder, description in FOLDERS
+    )

@@ -236,7 +236,6 @@ class WatcherStressTest(unittest.TestCase):
         monitor_thread.start()
         self.assertTrue(self.watcher._running, "Watcher should be running")
         
-        
         input_content = ''
         # Create large file in chunks
         with open(file_path, "wb") as f:
@@ -247,7 +246,7 @@ class WatcherStressTest(unittest.TestCase):
                 f.write(chunk)
                 input_content += f"chunk {i}" * (
                     chunk_size // len(f"chunk {i}".encode())
-                )
+                ) 
                 time.sleep(2)  # Simulate writing in chunks
 
         # Wait for file to be processed

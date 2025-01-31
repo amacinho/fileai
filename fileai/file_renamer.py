@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 import re
 
-from fileai.config import PROMPT
+from fileai.config import PROMPT, generate_folders_list
 
 
 class FileRenamer:
@@ -18,7 +18,10 @@ class FileRenamer:
 
 
     def categorize_file(self, options):
-        prompt = PROMPT.format(relative_file_path=options.get("relative_file_path", ""))
+        prompt = PROMPT.format(
+            relative_file_path=options.get("relative_file_path", ""),
+            folders_list=generate_folders_list()
+        )
         response = self.api.process_content_with_llm(
             prompt=prompt,
             content=options.get("content", ""),

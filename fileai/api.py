@@ -5,16 +5,23 @@ from google import genai
 from google.genai import types
 from fileai.rate_limiter import RateLimiter
 from fileai.content_adapter import ContentAdapter
-from fileai.config import load_config, save_config
+from fileai.config import load_config, save_config, FOLDERS
 from pydantic import BaseModel
 import json
+import enum
 
+# Dynamically create Folder enum from config
+Folder = enum.Enum(
+    'Folder',
+    {name: name for name, _ in FOLDERS}
+)
+    
 class Response(BaseModel):
     doc_type: str
     doc_date: str
     doc_topic: str
     doc_owner: str
-    doc_folder: str
+    doc_folder: Folder
     doc_keywords: list[str]
 
 class LLMAPI(ABC):
