@@ -1,7 +1,18 @@
 import argparse
+import logging
 from fileai.api import GeminiAPI
 from fileai.watcher import Watcher
 from fileai.config import get_config_file
+
+logging.getLogger("PIL").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+logging.getLogger("google").setLevel(logging.WARNING)
+logging.getLogger("googleapiclient").setLevel(logging.WARNING)
+# Configure the logging format
+log_format = "%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s"
+# Apply the configuration
+logging.basicConfig(level=logging.DEBUG, format=log_format)
+
 
 def create_api(api_type: str, api_key: str = None, model: str = None):
     """Create the appropriate API instance based on type.

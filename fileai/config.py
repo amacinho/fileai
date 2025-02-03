@@ -91,12 +91,7 @@ SUPPORTED_TEXT_EXTENSIONS = {
     ".yml",
 }
 SUPPORTED_DOC_EXTENSIONS = {".docx", ".doc", ".xls", ".xlsx", ".ppt", ".pptx"}
-SUPPORTED_EXTENSIONS = (
-    {".pdf"}
-    | SUPPORTED_IMAGE_EXTENSIONS
-    | SUPPORTED_TEXT_EXTENSIONS
-    | SUPPORTED_DOC_EXTENSIONS
-)
+# File extensions are now handled by the file handler registry
 
 # Folder configuration - tuples of (folder_name, description)
 FOLDERS = [
@@ -109,31 +104,52 @@ FOLDERS = [
     ("home", "Mortgage, rent, utilities, and home insurance"),
     ("receipts", "Purchase receipts and invoices"),
     ("work", "Employment contracts, pay slips, work-related documents"),
-    ("education", "School records, diplomas, certificates, transcripts"),
+    ("education", "School records, diplomas, certificates, transcripts, school forms"),
     ("tax", "Tax returns, tax-related documents"),
-    ("government", "Government-issued documents, IDs, passports"),
+    ("government-it", "Italian Government-issued documents, IDs, passports"),
+    ("government-tr", "Turkish Government-issued documents, IDs, passports"),
+    ("government-us", "USA Government-issued documents, IDs, passports"),
+    ("visa-immigration", "Any visa/immigration related document that doesn't fall under the government-XX folders"),
     ("misc", "Miscellaneous uncategorized documents"),
 ]
 
 class Asset:
     """Image/Doc or PDF asset to be processed."""
 
-    def __init__(self, path: str, mime_type: str):
-        self.path = path
-        self.mime_type = mime_type
-        self.type = self._determine_type()
+    def __init__(self, path: Path = None, file_type: str = None):
+        """Initialize asset with either a path or type."""
+        if path:
+            self.path = path
+            self.type = self._determine_type()
+        else:
+            self.path = None
+            self.type = file_type
 
     def _determine_type(self):
-        extension = os.path.splitext(self.path)[1].lower()
+        if not self.path:
+            return None
+        extension = self.path.suffix
         if extension in SUPPORTED_IMAGE_EXTENSIONS:
             return "image"
         elif extension == ".pdf":
             return "pdf"
         elif extension in SUPPORTED_TEXT_EXTENSIONS:
             return "text"
-        elif extension in SUPPORTED_DOC_EXTENSIONS:
+        elif extension in {".docx", ".doc", ".ppt", ".pptx"}:
             return "doc"
+        elif extension in {".xls", ".xlsx"}:
+            return "spreadsheet"
         return None
+
+    @classmethod
+    def get_supported_extensions(cls):
+        """Return all supported file extensions"""
+        return (
+            SUPPORTED_IMAGE_EXTENSIONS
+            | SUPPORTED_TEXT_EXTENSIONS
+            | SUPPORTED_DOC_EXTENSIONS
+            | {".pdf"}
+        )
 
 PROMPT = """
 Document Naming Assistant Task

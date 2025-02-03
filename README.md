@@ -51,8 +51,6 @@ The API key precedence is:
 # Basic usage
 fileai input_directory output_directory gemini
 
-
-
 # With API key provided via command line
 fileai input_directory output_directory gemini --api-key your-api-key
 

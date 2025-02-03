@@ -3,6 +3,8 @@ import os
 import tempfile
 from PIL import Image
 from fileai.pdf_transformer import PDFTransformer
+from pathlib import Path
+from fileai.config import Asset
 
 class ContentAdapter:
     """Adapts content (images, PDFs, text files) for API upload by handling size and format requirements"""
@@ -15,83 +17,58 @@ class ContentAdapter:
         """
         self.client = client
         
-    def adapt_pdf(self, asset, temp_path):
+    def adapt_pdf(self, asset: Asset) -> Path:
         """
         Adapt PDF files for API upload by extracting first two pages
         
         :param asset: Asset object containing file information
-        :param temp_path: Path to save adapted file
-        :return: str mime_type
+        :return: Path to temporary file
         """
         pdf_transformer = PDFTransformer()
-        pdf_transformer.save_first_two_pages(asset.path, temp_path)
-        return 'application/pdf'
+        with tempfile.NamedTemporaryFile(suffix=asset.path.suffix, delete=False) as temp_file:
+            temp_path = temp_file.name
+            pdf_transformer.save_first_two_pages(asset.path, temp_path)
+        return temp_path
         
-    def adapt_image(self, asset, temp_path):
+    def adapt_image(self, asset: Asset) -> Path:
         """
         Adapt image files for API upload by resizing to acceptable dimensions
-        
-        :param asset: Asset object containing file information
-        :param temp_path: Path to save adapted file
-        :return: str mime_type
+        Converts the image to PNG and creates a 1024x1024 thumbnail        
         """
         with Image.open(asset.path) as img:
             img.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
-            img.save(temp_path)
+            with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as temp_file:
+                temp_path = temp_file.name
+                img.save(temp_path, format="PNG")
+            return temp_path
         
-        file_extension = os.path.splitext(asset.path)[1].lower()
-        if file_extension in ('.jpg', '.jpeg'):
-            return 'image/jpeg'
-        elif file_extension == '.png':
-            return 'image/png'
-        return asset.mime_type
-        
-    def adapt_text(self, asset, temp_path):
-        """
-        Adapt text files for API upload by truncating to acceptable length
-        
-        :param asset: Asset object containing file information
-        :param temp_path: Path to save adapted file
-        :return: str mime_type
-        """
+    def adapt_text(self, asset: Asset) -> Path:
         with open(asset.path, 'r') as asset_file:
             text_content = asset_file.read(5000)  # Truncate to first 5000 chars
-        with open(temp_path, 'w') as temp_file:
-            temp_file.write(text_content)
-        return 'text/plain'
+        with tempfile.NamedTemporaryFile(suffix=asset.path.suffix, delete=False) as temp_file:
+            temp_path = temp_file.name
+            with open(temp_path, 'w') as temp_file:
+                temp_file.write(text_content)
+                return temp_path
 
-    def adapt_content(self, asset):
-        """
-        Adapt content for API upload by handling size and format requirements
-        
-        :param asset: Asset object containing file information
-        :return: tuple(Asset, list of temp files to cleanup)
-        """
+    def adapt_content(self, asset: Asset):
         if not asset:
             return None, []
             
         temp_files = []
         try:
-            file_extension = os.path.splitext(asset.path)[1].lower()
+            if asset.type == 'pdf':
+                temp_path = self.adapt_pdf(asset)
+            elif asset.type == 'image':
+                temp_path = self.adapt_image(asset)
+            elif asset.type == 'text':
+                temp_path = self.adapt_text(asset)
+            else:
+                raise ValueError(f"Unsupported content type: {asset.type}")
             
-            with tempfile.NamedTemporaryFile(suffix=file_extension, delete=False) as temp_file:
-                temp_path = temp_file.name
-                temp_files.append(temp_path)
-                
-                # Adapt content based on type
-                if asset.type == 'pdf':
-                    mime_type = self.adapt_pdf(asset, temp_path)
-                elif asset.type == 'image':
-                    mime_type = self.adapt_image(asset, temp_path)
-                elif asset.type == 'text':
-                    mime_type = self.adapt_text(asset, temp_path)
-                else:
-                    raise ValueError(f"Unsupported content type: {asset.type}")
-
-                # Return adapted asset
-                asset.temp_path = temp_path
-                asset.mime_type = mime_type
-                return asset, temp_files
+            temp_files.append(temp_path)
+            asset.temp_path = temp_path
+            return asset, temp_files
                 
         except Exception as err:
             # Clean up temp files on error

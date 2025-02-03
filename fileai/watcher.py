@@ -6,7 +6,7 @@ from typing import Dict, List
 from watchdog.observers.polling import PollingObserver
 from watchdog.events import FileSystemEventHandler
 
-from fileai.file_organizer import FileOrganizer
+from fileai.document_processor import DocumentProcessor
 
 
 @dataclass
@@ -58,7 +58,7 @@ class FileEventHandler(FileSystemEventHandler):
         """Get files that haven't been modified for 5 seconds. Order by folder depth."""
         current_time = time.time()
         stable_files = {}
-        for path,state in self.file_states.items():
+        for path, state in self.file_states.items():
             if current_time - state.last_modified > 5:
                 stable_files[path] = state
         logging.debug(f"Found {len(stable_files)} stable files")
@@ -78,7 +78,7 @@ class Watcher:
         self.input_path = Path(input_path)
         self.output_path = Path(output_path)
 
-        self.organizer = FileOrganizer(self.input_path, self.output_path, api)
+        self.processor = DocumentProcessor(self.input_path, self.output_path, api)
         self.event_handler = FileEventHandler(self)
         self.observer = PollingObserver(timeout=1)
         self.observer.schedule(self.event_handler, str(self.input_path), recursive=True)
@@ -95,7 +95,7 @@ class Watcher:
     def _process_file(self, file_path):
         try:
             if self._should_process_file(file_path):
-                self.organizer.organize_file(file_path)
+                self.processor.process_document(file_path)
                 ext = Path(file_path).suffix
                 if ext not in self.event_handler.processed_files:
                     self.event_handler.processed_files[ext] = 0
@@ -104,7 +104,7 @@ class Watcher:
             logging.error(f"Failed to process {file_path}: {e}")
 
     def process_existing_files(self):
-        self.organizer.organize_directory()
+        self.processor.process_directory()
 
     def start_monitoring(self):
         self._running = True

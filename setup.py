@@ -13,6 +13,7 @@ setup(
         "pdf2image",
         "PyPDF2",
         "inotify",
+        'docx',
     ],
     entry_points={
         "console_scripts": [
