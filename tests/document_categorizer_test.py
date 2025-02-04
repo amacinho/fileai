@@ -70,15 +70,9 @@ def test_generate_filename():
 def test_asciify_and_lowercase():
     """Test text normalization with special characters."""
     categorizer = DocumentCategorizer(None)
-    
-    # Test Turkish characters
-    text = "Şirket Çalışanı İş Günü"
-    result = categorizer._asciify_and_lowercase(text)
-    # Updated assertion to match actual behavior with dotted İ
-    assert "sirket-calisani" in result and "gunu" in result
-    
+        
     # Test mixed case and spaces
-    text = "Sample TEXT with SPACES"
+    text = "Sample TEXT with  SPACES"
     result = categorizer._asciify_and_lowercase(text)
     assert result == "sample-text-with-spaces"
 

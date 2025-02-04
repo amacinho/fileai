@@ -51,10 +51,10 @@ class DocumentCategorizer:
         text = text.lower()
         replacements = {
             'ç': 'c', 'ı': 'i', 'ü': 'u', 'ğ': 'g', 'ş': 's',
-            ' ': '-'
         }
         for old, new in replacements.items():
             text = text.replace(old, new)
+        text = re.sub(r'\s+', '-', text)
         return text
 
     def _sanitize_filename(self, filename: str) -> str:

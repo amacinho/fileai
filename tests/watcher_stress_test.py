@@ -64,14 +64,18 @@ class WatcherStressTest(unittest.TestCase):
         self.png_base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z/C/HgAGgwJ/lK3Q6wAAAABJRU5ErkJggg=="
         
         mock_response = Mock()
-        mock_response.text = json.dumps({
-            "doc_type": "invoice",
-            "doc_date": "2016-01-01",
-            "doc_topic": "car insurance",
-            "doc_owner": "John",
-            "doc_folder": "car",
-            "doc_keywords": ["car", "insurance", "invoice", "payment"]
-        })
+        def mock_categorization_response(options):
+            filename, folder = get_filename_and_folder_from_relative_path(options.get("relative_file_path", ""))
+            return json.dumps({
+                "doc_type": "invoice",
+                "doc_date": "2016-01-01",
+                "doc_topic": "car insurance",
+                "doc_owner": "John",
+                "doc_folder": folder,
+                "doc_keywords": ["car", "insurance", "invoice", "payment"]
+            })
+        mock_response = Mock()
+        mock_response.text = lambda options: mock_categorization_response(options)
         
         # Initialize API with mocks
         self.api = GeminiAPI()
@@ -154,7 +158,7 @@ class WatcherStressTest(unittest.TestCase):
             return filename, folder
 
         self.watcher = Watcher(self.watch_dir, self.output_dir, self.api)
-        self.watcher.organizer.file_renamer.categorize_file = Mock(
+        self.watcher.processor.categorizer.categorize_document = Mock(
             side_effect=unique_categorization
         )
         monitor_thread = threading.Thread(target=self.watcher.start_monitoring)
@@ -228,7 +232,7 @@ class WatcherStressTest(unittest.TestCase):
 
         # Start watcher in a thread
         self.watcher = Watcher(self.watch_dir, self.output_dir, self.api)
-        self.watcher.organizer.file_renamer.categorize_file = Mock(
+        self.watcher.processor.categorizer.categorize_document = Mock(
             return_value=('file', 'personal')
         )
         monitor_thread = threading.Thread(target=self.watcher.start_monitoring)

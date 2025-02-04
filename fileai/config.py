@@ -2,6 +2,7 @@ import os
 import json
 import logging
 from pathlib import Path
+from typing import Optional
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -110,20 +111,23 @@ FOLDERS = [
     ("government-tr", "Turkish Government-issued documents, IDs, passports"),
     ("government-us", "USA Government-issued documents, IDs, passports"),
     ("visa-immigration", "Any visa/immigration related document that doesn't fall under the government-XX folders"),
+    ("legal", "Legal documents and contracts"),
     ("misc", "Miscellaneous uncategorized documents"),
 ]
 
 class Asset:
     """Image/Doc or PDF asset to be processed."""
 
-    def __init__(self, path: Path = None, file_type: str = None):
-        """Initialize asset with either a path or type."""
+    def __init__(self, path: Path = None, file_type: str = None, temp_path: Path = None):
+        """Initialize asset with path, type, and optional temp_path."""
         if path:
             self.path = path
             self.type = self._determine_type()
         else:
             self.path = None
             self.type = file_type
+        self.temp_path = temp_path
+        self.target_path: Optional[Path] = None
 
     def _determine_type(self):
         if not self.path:

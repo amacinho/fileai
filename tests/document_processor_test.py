@@ -99,7 +99,7 @@ class TestDocumentProcessor(unittest.TestCase):
             # Verify the workflow
             self.processor.categorizer.categorize_document.assert_called_once()
             self.processor.dir_manager.get_category_path.assert_called_once_with("category")
-            self.processor.fs_manager.move_file.assert_called_once()
+            self.processor.fs_manager.move_file.assert_called_once_with(test_file, self.output_path / "category" / "new_name.pdf")
             self.processor.dir_manager.cleanup_empty_dirs.assert_called_once()
             
             self.assertIsNotNone(result)
@@ -147,6 +147,7 @@ class TestDocumentProcessor(unittest.TestCase):
                         
                         # Verify all files were processed
                         self.assertEqual(mock_process.call_count, len(mock_files))
+                        mock_process.assert_has_calls([call(file) for file in mock_files])
 
 
 if __name__ == "__main__":

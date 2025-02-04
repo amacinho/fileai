@@ -1,31 +1,32 @@
 # Active Context
 
 ## Current Task
-Fixed document processor test failures and import issues
+Refactoring document handlers and content adapter.
 
 ## Recent Changes
-1. Fixed document processor test failures:
-   - Changed direct import to module import for better testability
-   - Fixed Asset handling in _extract_content method
-   - Updated return type hints to match implementation
-
-2. Code Improvements
-   - Improved mock patching in tests
-   - Fixed Asset object handling
-   - Added missing imports
+1. Removed content_adapter.py and moved functionality into handlers
+2. Updated Asset class with temp_path attribute
+3. Modified document handlers to:
+   - Create and manage temporary files
+   - Use Path objects consistently
+   - Remove text return value
+4. Updated tests with:
+   - Proper mocking of dependencies
+   - Content verification
+   - Path object usage
 
 ## Current Status
-1. Document processor tests now working:
-   - Fixed test_extract_content failure
-   - Proper Asset object handling
-   - Correct content extraction
+1. Code changes are complete
+2. Tests have been updated
+3. Need to run tests to verify changes
 
 ## Next Steps
-1. Fix filesystem manager test failures
-2. Verify full system workflow
-3. Update documentation to reflect changes
+1. Run tests to verify all changes work correctly
+2. Fix any test failures that arise
+3. Consider updating other components that might be affected by the changes
 
 ## Future Improvements
-1. Consider standardizing import patterns across codebase
-2. Review other test files for similar patching issues
-3. Enhance error handling and logging
+1. Consider adding error recovery for temporary files
+2. Add cleanup mechanism for temporary files
+3. Consider caching for frequently processed files
+4. Add more comprehensive end-to-end tests
