@@ -7,7 +7,7 @@ import shutil
 logging.getLogger("PIL").setLevel(logging.INFO)
 
 SUPPORTED_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".tif", ".webp", ".heic"]
-SUPPORTED_DOCUMENT_EXTENSIONS = [".docx", ".doc", ".odt"] 
+SUPPORTED_DOCUMENT_EXTENSIONS = [".docx"]
 SUPPPORTED_SPREADSHEET_EXTENSIONS = [".xlsx", ".xls"]
 SUPPORTED_TEXT_EXTENSIONS = [".txt", ".csv", ".tsv", ".md", ".html", ".xml", ".json", ".yaml", ".yml", ".rtf"]
 SUPPORTED_PDF_EXTENSIONS = [".pdf"]
@@ -23,7 +23,14 @@ class BaseDocumentHandler:
     
     @classmethod
     def process(cls, file_path: Path) -> Optional[Path]:
-
+        """Process a document and return the temporary processed file path.
+        
+        Args:
+            file_path: Path to the original file to process
+            
+        Returns:
+            Path to the temporary processed file, or None if processing failed
+        """
         raise NotImplementedError
 
     @classmethod
@@ -60,9 +67,12 @@ class ImageHandler(BaseDocumentHandler):
                 img.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
                 img.save(temporary_path, format="PNG")
                 return temporary_path
-        except Exception as e:
-            logging.error(f"Error processing image {file_path}: {e}")
-            raise e
+        except IOError as e: # Catch IOError specifically
+            logging.error(f"ImageHandler: IOError processing image {file_path}: {e}") # Log IOError
+            raise Exception from e # Re-raise as generic Exception
+        except Exception as e: # Catch other exceptions
+            logging.error(f"ImageHandler: Unexpected error processing image {file_path}: {e}") # Log other exceptions
+            raise # Re-raise the original exception
 
 class DocHandler(BaseDocumentHandler):
     """Handles Microsoft Word document processing"""
@@ -73,8 +83,13 @@ class DocHandler(BaseDocumentHandler):
     def process(cls, file_path: Path) -> Optional[Path]:
         temporary_path = None
         try:
-            temporary_path = cls.create_temp_file(file_path.suffix)
-            shutil.copy2(file_path, temporary_path)
+            import docx
+            doc = docx.Document(file_path)
+            text = "\n".join([para.text for para in doc.paragraphs])
+            
+            temporary_path = cls.create_temp_file('.txt')
+            with open(temporary_path, 'w', encoding='utf-8') as f:
+                f.write(text)
             return temporary_path
         except Exception as e:
             logging.error(f"Error processing Word document {file_path}: {e}")
@@ -88,8 +103,15 @@ class XlsxHandler(BaseDocumentHandler):
     def process(cls, file_path: Path) -> Optional[Path]:
         temporary_path = None
         try:
-            temporary_path = cls.create_temp_file(file_path.suffix)
-            shutil.copy2(file_path, temporary_path)
+            import pandas as pd
+            # Read Excel file
+            df = pd.read_excel(file_path)
+            # Convert DataFrame to text
+            text = df.to_string(index=False)
+            
+            temporary_path = cls.create_temp_file('.txt')
+            with open(temporary_path, 'w', encoding='utf-8') as f:
+                f.write(text)
             return temporary_path
         except Exception as e:
             logging.error(f"Error processing Excel file {file_path}: {e}")
@@ -134,7 +156,7 @@ class TextHandler(BaseDocumentHandler):
             temporary_path = cls.create_temp_file(file_path.suffix)
             with open(temporary_path, 'w') as f:
                 f.write(text)
-                return temporary_path 
+                return temporary_path
         except Exception as e:
             logging.error(f"Error processing text file {file_path}: {e}")
             raise e

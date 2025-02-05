@@ -12,8 +12,7 @@ class TestGeminiAPI(unittest.TestCase):
 
         api = GeminiAPI()
         contents = api._prepare_contents(
-            "test prompt", path="apath.pdf"
-        )
+            "test prompt", path="apath.pdf")
 
         self.assertEqual(len(contents), 2)
         upload_content = contents[0]

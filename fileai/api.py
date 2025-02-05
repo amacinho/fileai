@@ -98,7 +98,7 @@ class GeminiAPI(LLMAPI):
         )
 
     def _prepare_contents(self, prompt, path: Path) -> list[types.Content]:
-        upload_content = self._upload(path=path)        
+        upload_content = self._upload(path=path)
         prompt_content = types.Content(role="user", parts=[types.Part.from_text(prompt)])
         return [upload_content, prompt_content]
 
@@ -133,11 +133,4 @@ class GeminiAPI(LLMAPI):
             return json.loads(response.text)
         except Exception as err:
             raise Exception(f"Gemini API error: {str(err)}")
-        finally:
-            # Clean up temporary file
-            try:
-                os.unlink(path)
-            except Exception as e:
-                logging.error(
-                    f"Error cleaning up temporary file {path}: {str(e)}"
-                )
+            

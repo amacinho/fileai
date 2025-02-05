@@ -1,32 +1,58 @@
 # Product Context
 
 ## Purpose
-FileAI is an intelligent file organization system that automatically categorizes and renames files based on their content using AI. It helps users maintain a clean and structured file system without manual intervention.
 
-## Problems Solved
-1. Manual file organization is time-consuming and error-prone
-2. Files often have inconsistent naming conventions
-3. Documents can be hard to find when not properly categorized
-4. Users struggle to maintain consistent folder structures
-5. Important documents may get lost in unorganized directories
+The FileAI system is designed to automate document organization and processing using AI capabilities. It provides:
 
-## Core Functionality
-1. Automatic file categorization using AI
-2. Smart file renaming based on content analysis
-3. Consistent folder structure maintenance
-4. Support for multiple document types (PDF, images, text, Office documents)
-5. Real-time file system monitoring for automatic processing
+1. **Automated Document Categorization**
+   - Classifies documents into predefined categories
+   - Uses AI to analyze document content
+   - Generates descriptive filenames
 
-## Target Users
-- Individuals managing personal documents
-- Professionals handling business documents
-- Anyone dealing with large numbers of files that need organization
+2. **File System Management**
+   - Monitors input directories for new files
+   - Processes existing files in bulk
+   - Organizes files into structured output directories
+
+3. **Content Processing**
+   - Handles multiple file formats
+   - Extracts and processes content
+   - Maintains document metadata
 
 ## Key Features
-1. Multi-format document support (PDF, DOC, XLSX, images, text)
-2. Intelligent categorization into predefined folders
-3. Content-aware file renaming
-4. Automatic folder structure creation
-5. File system monitoring for automatic processing
-6. Error handling and logging
-7. Configuration management
+
+1. **File Type Support**
+   - Images, documents, spreadsheets, PDFs, and text files
+   - Automatic format detection
+   - Content extraction and conversion
+
+2. **AI Integration**
+   - Gemini API for document analysis
+   - Structured metadata extraction
+   - Rate-limited API calls
+
+3. **Configuration**
+   - Customizable input/output paths
+   - Configurable API settings
+   - Flexible folder structure
+
+4. **Monitoring**
+   - Real-time file system monitoring
+   - Batch processing of existing files
+   - Automatic cleanup of empty directories
+
+## Workflow
+
+1. **Input**
+   - Files placed in monitored directory
+   - Supported file types automatically detected
+
+2. **Processing**
+   - Content extraction and conversion
+   - AI-based categorization
+   - Metadata extraction
+
+3. **Output**
+   - Files organized into category folders
+   - Standardized filenames
+   - Clean directory structure

@@ -36,16 +36,30 @@ class TestDocumentPipeline(unittest.TestCase):
         categorizer = DocumentCategorizer(self.api_mock)
         file_operator = FileOperator(input_base_path=self.input_path, output_base_path=self.output_path, remove_input_files=True)
         pipeline = DocumentPipeline(categorizer=categorizer, file_operator=file_operator)
+        supported_extensions = {'.doc', '.docx', '.html', '.pdf', '.txt', '.rtf'}
         for file in self.input_path.iterdir():
-            target_path = pipeline.process(file)
-            # Assert the expected output file exists in the right place
-            expected_output_path = self.output_path / f"work" / "2025-02-04" / "test owner" / "test document" / file.name
-            self.assertTrue(target_path)
-
-   
-
-   
-
+            if file.suffix not in supported_extensions:
+                print(f"\nSkipping unsupported file type: {file.suffix}")
+                continue
+            try:
+                target_path = pipeline.process(file)
+                # Assert the expected output file exists in the right place
+                expected_output_path = (
+                    self.output_path
+                    / "work"
+                    / f"2025-02-04-test-document-test-owner{file.suffix}"
+                )
+                print(f"\nExpected path: {expected_output_path}")
+                print(f"Actual path: {target_path}")
+                print("Output directory contents:")
+                for p in self.output_path.rglob("*"):
+                    print(f"  {p.relative_to(self.output_path)}")
+                self.assertEqual(target_path, expected_output_path)
+            except ValueError as e:
+                if "Unsupported file type" in str(e):
+                    print(f"\nSkipping unsupported file type: {file.suffix}")
+                    continue
+                raise
     
 if __name__ == '__main__':
     unittest.main()

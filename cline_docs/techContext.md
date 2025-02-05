@@ -1,107 +1,64 @@
 # Technical Context
 
-## Architecture Overview
-The system uses a pipeline-based architecture for document processing:
-
-1. Document Pipeline
-   - Core processing logic
-   - Step-by-step document handling
-   - State management
-   - Error handling
-
-2. Asset Management
-   - Temporary file handling
-   - File type detection
-   - MIME type management
-
-3. Document Handlers
-   - File type specific processing
-   - Content extraction
-   - Format conversion
-
-4. API Integration
-   - LLM provider integration
-   - Document categorization
-   - Metadata extraction
-
 ## Technologies Used
 
-### Core System
-- Python 3.12+
-- pathlib for file operations
-- logging for error tracking
+1. **Core Technologies**
+   - Python 3.x
+   - Watchdog for file system monitoring
+   - PyPDF2 for PDF processing
+   - PIL/Pillow for image processing
 
-### Document Processing
-- pdfplumber for PDF handling
-- python-docx for Word documents
-- Pillow for image processing
-- pandas for spreadsheet handling
+2. **API Integration**
+   - Gemini API
+   - Rate limiting implementation
+   - Structured response handling
 
-### API Integration
-- Gemini API for document analysis
-- Rate limiting for API calls
-- JSON for response handling
+3. **File Handling**
+   - Support for multiple file types:
+     - Images: JPG, PNG, GIF, BMP, TIFF, WEBP, HEIC
+     - Documents: DOC, DOCX
+     - Spreadsheets: XLS, XLSX
+     - PDFs
+     - Text files: TXT, CSV, MD, HTML, XML, JSON, YAML, RTF
 
-### Testing
-- pytest for unit testing
-- unittest.mock for mocking
-- Test fixtures for file operations
+4. **Configuration**
+   - Environment variables
+   - JSON config file
+   - Cross-platform config directory handling
 
 ## Development Setup
-1. Python virtual environment
-2. Required dependencies from requirements.txt
-3. API keys configured in .env or config file
-4. Test fixtures in tests/fixtures/
+
+1. **Dependencies**
+   - Managed via requirements.txt
+   - Core dependencies:
+     - watchdog
+     - PyPDF2
+     - Pillow
+     - python-dotenv
+
+2. **Logging**
+   - Comprehensive logging system
+   - Configurable log level
+   - Detailed error tracking
+
+3. **Testing**
+   - Unit tests for core functionality
+   - Integration tests for API interactions
+   - End-to-end tests for complete workflows
+   - Test fixtures for various scenarios
 
 ## Technical Constraints
-1. File Operations
-   - Must handle large files efficiently
-   - Need to manage temporary files
-   - Must handle concurrent access
 
-2. API Usage
-   - Rate limiting requirements
-   - Response format standardization
-   - Error handling for API failures
+1. **Rate Limiting**
+   - 14 API calls per minute
+   - Automatic wait calculation
+   - Queue-based implementation
 
-3. Document Processing
-   - Memory efficient processing
-   - Support for multiple file formats
-   - Proper cleanup of temporary files
+2. **File Size**
+   - Image resizing to 1024x1024
+   - PDF processing limited to first 2 pages
 
-4. Testing
-   - Mock responses for API calls
-   - Test fixtures for file operations
-   - Coverage for error cases
-
-## Performance Considerations
-1. File Processing
-   - Efficient content extraction
-   - Proper resource cleanup
-   - Memory management
-
-2. API Calls
-   - Rate limiting
-   - Response caching
-   - Error recovery
-
-3. Pipeline Operations
-   - Step isolation
-   - State management
-   - Error containment
-
-## Security Considerations
-1. File Access
+3. **Security**
+   - Input/output path validation
    - Safe file operations
-   - Permission management
-   - Path validation
-
-2. API Security
-   - Key management
-   - Secure communication
-   - Response validation
-
-3. Data Protection
-   - Temporary file cleanup
-   - Secure file storage
-   - Access control
+   - Proper resource cleanup

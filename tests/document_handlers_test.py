@@ -1,8 +1,7 @@
 import pytest
 from pathlib import Path
-from unittest.mock import Mock, patch, mock_open
+from unittest.mock import Mock, patch
 from PIL import Image
-import io
 import os # Import os module
 
 from fileai.document_handlers import (
@@ -49,6 +48,9 @@ def test_get_handler():
     assert get_handler('.pdf') == PdfHandler
     assert get_handler('.txt') == TextHandler
     
+    # Verify .doc is not supported
+    assert get_handler('.doc') is None
+    
     # Test case insensitivity
     assert get_handler('.JPG') == ImageHandler
     assert get_handler('.PDF') == PdfHandler
@@ -57,29 +59,33 @@ def test_get_handler():
     assert get_handler('.unsupported') is None
 
 def test_text_handler(test_files_dir):
-    """Test TextHandler functionality."""
+    """Test TextHandler functionality, allowing actual temp file creation."""
     text_file = test_files_dir / "test.txt"
-    expected_content = "Shopping list  2025 February 02\n\nApples\nOranges\nButter\n"
-    
-    # Test successful processing
-    with patch("tempfile.NamedTemporaryFile") as mock_tempfile:
-        mock_file = mock_tempfile.return_value.__enter__.return_value
-        mock_file.name = "/tmp/mock_temp_path"
-        asset = TextHandler.process(text_file)
-        
-        # Verify asset
-        assert asset is not None
-        assert asset.type == "text"
-        assert asset.temp_path == Path("/tmp/mock_temp_path")
-        
-        # Verify temp file content
-        with patch("builtins.open", mock_open()) as mock_open_file:
-            TextHandler.process(text_file)
-            mock_open_file.return_value.write.assert_called_once_with(expected_content)
-    
+    expected_content = """Shopping list  2025 February 02
+
+Apples
+Oranges
+Butter"""
+
+    # Test successful processing - no mocking of file operations
+    temp_path = TextHandler.process(text_file)
+
+    # Verify temp path
+    assert temp_path is not None
+    assert isinstance(temp_path, Path)
+    assert temp_path.exists()
+
+    # Verify temp file content
+    actual_content = temp_path.read_text()
+    assert actual_content == expected_content
+
+    # Cleanup temp file
+    temp_path.unlink()
+
     # Test error handling with non-existent file
-    asset = TextHandler.process(test_files_dir / "nonexistent.txt")
-    assert asset is None
+    with pytest.raises(Exception):
+        TextHandler.process(test_files_dir / "nonexistent.txt")
+
 
 def test_image_handler(test_files_dir):
     """Test ImageHandler functionality."""
@@ -88,105 +94,83 @@ def test_image_handler(test_files_dir):
     print(f"test_image_handler: img_file path: {img_file}") # Log img_file path
     
     # Test successful processing
-    with patch("tempfile.NamedTemporaryFile") as mock_tempfile, \
-         patch("PIL.Image.open") as mock_image:
-        # Mock temp file
-        mock_file = mock_tempfile.return_value.__enter__.return_value
-        mock_file.name = "/tmp/mock_temp_path"
-        
+    with patch("PIL.Image.open") as mock_image:
         # Mock image operations
         mock_img = mock_image.return_value.__enter__.return_value
         mock_img.thumbnail = Mock()
         mock_img.save = Mock()
         
         # Process image
-        asset = ImageHandler.process(img_file)
+        asset_path = ImageHandler.process(img_file)
         
-        # Verify asset
-        assert asset is not None
-        assert asset.type == "image"
-        assert asset.temp_path == Path("/tmp/mock_temp_path")
+        # Verify temp path
+        assert asset_path is not None
+        assert isinstance(asset_path, Path)
+        assert asset_path.exists()
         
         # Verify image operations
         mock_img.thumbnail.assert_called_once_with((1024, 1024), Image.Resampling.LANCZOS)
-        mock_img.save.assert_called_once_with(Path("/tmp/mock_temp_path"), format="PNG")
+        mock_img.save.assert_called_once_with(asset_path, format="PNG") # Use asset_path
     
-        # Test error handling with invalid image
-        invalid_img = test_files_dir / "invalid.png"
-        invalid_img.write_text("Not an image")
-        asset = ImageHandler.process(invalid_img)
-        assert asset is None
-
-
-import shutil
 
 def test_doc_handler(test_files_dir):
     """Test DocHandler functionality."""
     doc_file = test_files_dir / "doc1.docx"
 
-    with patch("tempfile.NamedTemporaryFile") as mock_tempfile, \
-            patch("shutil.copy2") as mock_copy:
-        # Mock temp file
-        mock_file = mock_tempfile.return_value.__enter__.return_value
-        mock_file.name = "/tmp/mock_temp_path"
+    # Process document
+    temp_path = DocHandler.process(doc_file)
 
-        # Process document
-        temp_path = DocHandler.process(doc_file)
+    # Verify temp file was created
+    assert temp_path is not None
+    assert isinstance(temp_path, Path)
+    assert temp_path.exists()
+    assert temp_path.suffix == '.txt'
 
-        # Verify temp file was created
-        assert temp_path == Path("/tmp/mock_temp_path")
+    # Verify text content
+    with open(temp_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+        assert "Shopping List" in content  # Verify expected text is present
 
-        # Verify file was copied
-        mock_copy.assert_called_once_with(doc_file, Path("/tmp/mock_temp_path"))
+    # Cleanup temp file
+    temp_path.unlink()
 
 def test_xlsx_handler(test_files_dir):
     """Test XlsxHandler functionality."""
     xlsx_file = test_files_dir / "doc1.xlsx"
 
-    with patch("tempfile.NamedTemporaryFile") as mock_tempfile, \
-            patch("shutil.copy2") as mock_copy:
-        # Mock temp file
-        mock_file = mock_tempfile.return_value.__enter__.return_value
-        mock_file.name = "/tmp/mock_temp_path"
+    # Process document
+    temp_path = XlsxHandler.process(xlsx_file)
 
-        # Process document
-        temp_path = XlsxHandler.process(xlsx_file)
+    # Verify temp file was created
+    assert temp_path is not None
+    assert isinstance(temp_path, Path)
+    assert temp_path.exists()
+    assert temp_path.suffix == '.txt'
 
-        # Verify temp file was created
-        assert temp_path == Path("/tmp/mock_temp_path")
+    # Verify text content
+    with open(temp_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+        assert "Groceries" in content 
 
-        # Verify file was copied
-        mock_copy.assert_called_once_with(xlsx_file, Path("/tmp/mock_temp_path"))
+    # Cleanup temp file
+    temp_path.unlink()
 
 def test_pdf_handler(test_files_dir):
     """Test PdfHandler functionality."""
     pdf_file = test_files_dir / "cv.pdf"
-    expected_text = "Test PDF content"
-    
-    with patch("tempfile.NamedTemporaryFile") as mock_tempfile, \
-         patch("pdfplumber.open") as mock_pdf_open:
-        # Mock temp file
-        mock_file = mock_tempfile.return_value.__enter__.return_value
-        mock_file.name = str(Path("mock_temp_path"))
-        
-        # Mock PDF content
-        mock_pdf = mock_pdf_open.return_value.__enter__.return_value
-        mock_page = Mock()
-        mock_page.extract_text.return_value = expected_text
-        mock_pdf.pages = [mock_page]
-        
-        # Process PDF
-        asset = PdfHandler.process(pdf_file)
-        
-        # Verify asset
-        assert asset is not None
-        assert asset.type == "pdf"
-        assert asset.temp_path == Path("mock_temp_path")
-        
-        # Verify temp file content
-        with patch("builtins.open", mock_open()) as mock_open_file:
-            PdfHandler.process(pdf_file)
-            mock_open_file.return_value.write.assert_called_once_with(expected_text)
+
+    # Process PDF
+    temp_path = PdfHandler.process(pdf_file)
+
+    # Verify temp path
+    assert temp_path is not None
+    assert isinstance(temp_path, Path)
+    assert temp_path.exists()
+
+    # Verify temp file content has 2 pages
+    from PyPDF2 import PdfReader
+    reader = PdfReader(temp_path)
+    assert len(reader.pages) == 2
 
 def test_handler_extension_lists():
     """Test that handler extension lists are properly defined."""

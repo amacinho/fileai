@@ -1,11 +1,10 @@
 import pytest
 from pathlib import Path
-from unittest.mock import Mock, patch
-from fileai.config import Asset
+from unittest.mock import Mock
 from fileai.document_categorizer import DocumentCategorizer
 
 class MockAPI:
-    def get_response(self, prompt: str, asset: Asset) -> dict:
+    def get_response(self, prompt: str, path: Path) -> dict:
         """Mock LLM response with predefined document attributes."""
         return {
             "doc_owner": "john",
@@ -34,7 +33,7 @@ def test_generate_filename():
         date="2024-01-15",
         owner="John Doe"
     )
-    assert filename == "invoice-abc-2024-01-15-john-doe"
+    assert filename == "2024-01-15-invoice-abc-john-doe"
     
     # Test with missing components
     filename = categorizer._generate_filename(
@@ -75,7 +74,7 @@ def test_categorize_document_api_error(mock_api):
     error_api.get_response.side_effect = Exception("API Error")
     
     categorizer = DocumentCategorizer(error_api)
-    asset = Asset(path="test.pdf")
+    path = Path("test.pdf")
     
     with pytest.raises(Exception):
-        categorizer.categorize_document(asset)
+        categorizer.categorize_document(path)

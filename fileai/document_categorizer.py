@@ -14,6 +14,10 @@ class DocumentCategorizer:
     def categorize_document(self, path: Path) -> Tuple[str, str]:
         """
         Categorize a document using AI and generate appropriate name.
+        
+        Args:
+            path: Path to the temporary processed file to be analyzed
+            
         Returns: (filename, category)
         """
         prompt = PROMPT.format(
@@ -41,7 +45,7 @@ class DocumentCategorizer:
 
     def _generate_filename(self, topic: str, date: str, owner: str) -> str:
         """Generate a standardized filename from components."""
-        filename = '-'.join(filter(None, [topic, date, owner]))
+        filename = '-'.join(filter(None, [date, topic, owner]))
         filename = self._asciify_and_lowercase(filename)
         return self._sanitize_filename(filename)
 

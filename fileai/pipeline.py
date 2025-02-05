@@ -14,6 +14,7 @@ class PipelineState:
     category: Optional[str] = None
     target_path: Optional[Path] = None
     filename: Optional[str] = None
+    api_sucess: Optional[bool] = None
 
     def reset(self):
         self.original_path = None
@@ -21,6 +22,7 @@ class PipelineState:
         self.category = None
         self.target_path = None
         self.filename = None
+        self.api_sucess = False
         
 class DocumentPipeline:
     """Pipeline for processing documents through the complete workflow."""
@@ -30,13 +32,18 @@ class DocumentPipeline:
     
     def process(self, file_path: Path) -> Path:
         """Process document through the complete pipeline."""
+        self.state = PipelineState(original_path=file_path)
         try:
-            self.state = PipelineState(original_path=file_path)
+            # Extract and categorize content
             (self.extract_content()
              .categorize()
-             .move_to_destination())
-            target_path = self.state.target_path
-            return target_path
+             .move_to_destination()
+             )
+            return self.state.target_path
+        except Exception as e:
+            logging.error(f"Failed to process file {file_path}: {e}")
+            # Move failed file to unsupported
+            return self.file_operator.move_to_unsupported(file_path)
         finally:
             self.state = None
 
@@ -57,7 +64,9 @@ class DocumentPipeline:
         if not self.state.temporary_path:
             raise ValueError("Cannot categorize document: temporary_path not set")
         
-        filename, category = self.categorizer.categorize_document(self.state.temporary_path)
+        filename, category = self.categorizer.categorize_document(
+            self.state.temporary_path
+        )
         if filename and category:
             self.state.filename = filename
             self.state.category = category
@@ -67,36 +76,41 @@ class DocumentPipeline:
         """Move document to its final destination."""
         if not self.state.category:
             raise ValueError("Cannot move document: category not set")
-        # Ensure category is a valid folder name
-        try:        
-            category_path = self.file_operator.output_base_path / self.state.category
-            category_path.mkdir(parents=True, exist_ok=True)
-            new_path = (
-                category_path / f"{self.state.filename}{self.state.original_path.suffix}"
-            )
-        except Exception as e:
-            logging.error(f"Failed to create new path: {e}")
-            raise e
+        if not self.state.filename:
+            raise ValueError("Cannot move document: filename not set")
         
-        # Handle duplicates
-        if self.file_operator.is_same_file(self.state.original_path, new_path):
-            if (self.file_operator.remove_input_files):
-                logging.info(f"Duplicate file found, removing: {self.state.original_path}")
-                self.file_operator.remove_file(self.state.original_path)
-            else:
-                logging.info(f"Duplicate file found, skipping: {self.state.original_path}")
+        category_path = self.file_operator.output_base_path / self.state.category
+        category_path.mkdir(parents=True, exist_ok=True)
+        new_path = category_path / f"{self.state.filename}{self.state.original_path.suffix}"
+        
+        # Check for hash-based duplicates
+        existing_duplicate = self.file_operator.find_duplicate_by_hash(self.state.original_path)
+        if existing_duplicate:
+            # Create versioned filename starting with _v2
+            base_name = f"{existing_duplicate.stem}_v2{existing_duplicate.suffix}"
+            new_path = existing_duplicate.parent / base_name
+            new_path = self.file_operator.ensure_unique_path(new_path)
+            logging.info(f"Duplicate file found by hash, creating versioned copy: {new_path}")
+        else:
+            # Ensure unique filename
+            if new_path.exists():
+                new_path = self.file_operator.ensure_unique_path(new_path)
+
+        # Copy file to destination
+        try:
+            self.state.target_path = self.file_operator.copy_file(self.state.original_path, new_path)
+            # Update hash dictionary with the new file
+            self.file_operator._update_hash_dict(self.state.target_path)
+        except OSError as e:
+            logging.error(f"Failed to copy file: {e}")
             self.state.target_path = None
             return self
 
-        # Ensure unique filename
-        if new_path.exists():
-            new_path = self.file_operator.ensure_unique_path(new_path)
-
-        # Move or copy file
+        # Remove original file only after successful copy
         if self.file_operator.remove_input_files:
-            self.state.target_path = self.file_operator.move_file(self.state.original_path, new_path)
-        else:
-            self.state.target_path = self.file_operator.copy_file(self.state.original_path, new_path)
-        return self
-
-    
+            try:
+                self.file_operator.remove_file(self.state.original_path)
+            except OSError as e:
+                logging.error(f"File copied, but failed to remove input file: {e}")
+                self.state.target_path = None
+                return self

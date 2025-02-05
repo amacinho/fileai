@@ -2,7 +2,6 @@ import os
 import json
 import logging
 from pathlib import Path
-from typing import Optional
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -102,7 +101,7 @@ Process:
     List these key elements (brief, no explanations):
 
     type: Document type. Some examples, invoice, bill, fine, ticket, leaflet, prescription, report, letter, email, contract, agreement, specification, manual, guide, form, certificate, statement, receipt, boarding pass, painting, photo, note, etc.
-    date: Document date (could be year, year-month, or full date) Use YYYY-MM-DD format. Can be empty string.
+    date: Document date (could be year, year-month, or full date) Use YYYY-MM-DD format. Can be empty string. Sometimes this fill be the year / month the document refers to. For example a statement for 2024 February issued in March would have 2024 February. Tax documents covering year X should have year X.
     topic: The main subject or topic of the document. What is this document about? This will be part of the file name. Be specific and descriptive.
     owner: The main person or entity involved in the document. If it's a family member (one of the Herdağdelens or family) use their first name only.
     folder: The folder where the document should be stored. Choose from the folders defined below. If none of the folders are a good match return misc.
