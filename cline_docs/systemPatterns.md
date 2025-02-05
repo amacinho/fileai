@@ -1,136 +1,83 @@
 # System Patterns
 
-## Architecture Overview
+## Pipeline Pattern
+The system now uses a pipeline pattern for document processing:
 
-### Core Components
-1. **Document Processor**
-   - Central orchestrator
-   - Manages file processing workflow
-   - Coordinates between components
-   - Handles file type validation
-
-2. **Document Handlers**
-   - Factory pattern for file type handling
-   - Base handler with simplified interface
-   - Specialized handlers per file type
-   - Focus on content extraction
-
-3. **Directory Manager**
-   - Manages folder structure
-   - Handles directory operations
-   - Ensures category directories exist
-   - Cleans up empty directories
-
-4. **Document Categorizer**
-   - AI-based document classification
-   - Uses LLM for content analysis
-   - Generates standardized filenames
-   - Determines appropriate categories
-
-5. **File System Manager**
-   - Low-level file operations
-   - File movement and renaming
-   - Error handling and recovery
-   - Path management
-
-6. **File System Watcher**
-   - Monitors directories for changes
-   - Triggers processing on new files
-   - Handles file system events
-   - Rate limiting for bulk operations
-
-## Design Patterns
-
-1. **Factory Pattern**
-   - Used in document handlers
-   - Dynamic handler selection based on file type
-   - Extensible for new file types
-   - Centralized handler registration
-
-2. **Strategy Pattern**
-   - Different strategies for different file types
-   - Consistent interface across handlers
-   - Pluggable processing algorithms
-
-3. **Observer Pattern**
-   - File system watching
-   - Event-driven processing
-   - Asynchronous operations
-
-4. **Singleton Pattern**
-   - Configuration management
-   - Logging system
-   - Rate limiter
-
-## Technical Decisions
-
-1. **File Type Support**
-   - PDF: Using pdfplumber for text extraction
-   - Images: PIL/Pillow for basic processing
-   - Office Documents:
-     * Word: python-docx for content extraction
-     * Excel: pandas with openpyxl engine for spreadsheet handling
-     * PowerPoint: Basic file type identification
-   - Text: Built-in file operations
-   - Focus on content over metadata
-
-2. **Testing Strategy**
-   - Pytest for test framework
-   - Temporary directories for file operations
-   - Mock objects for external services
-   - Fixtures for test data
-   - Simplified test assertions
-
-3. **Error Handling**
-   - Graceful degradation
-   - Focused error logging
-   - Basic error recovery
-   - Clear error messages
-
-4. **Configuration**
-   - Environment variables for secrets
-   - JSON config files for settings
-   - Runtime configuration options
-   - Default fallbacks
-
-5. **Performance Considerations**
-   - Rate limiting for API calls
-   - Efficient file operations
-   - Minimal processing overhead
-   - Streamlined data structures
-
-## Code Organization
-
-```
-fileai/
-├── api.py              # API endpoints
-├── config.py           # Configuration handling
-├── content_adapter.py  # Content processing and adaptation
-├── directory_manager.py # Directory operations
-├── document_categorizer.py # AI-based document classification
-├── document_handlers.py # Primary file type handlers
-├── document_processor.py # Main orchestration
-├── file_organizer.py   # Additional file organization logic
-├── filesystem_manager.py # File operations
-├── main.py             # Entry point
-├── pdf_transformer.py  # PDF-specific transformations
-├── rate_limiter.py     # API rate limiting
-└── watcher.py          # File system monitoring
+```python
+class DocumentPipeline:
+    def extract_content(self) -> 'DocumentPipeline':
+        # Extract content from document
+        return self
+        
+    def categorize(self, api) -> 'DocumentPipeline':
+        # Categorize document using API
+        return self
+        
+    def move_to_destination(self, output_dir) -> 'DocumentPipeline':
+        # Move file to final location
+        return self
 ```
 
-### Additional Components
-- Expanded handler architecture with base and specialized handlers
-- Content adaptation layer
-- PDF-specific transformation utilities
-- Modular file organization logic
+Benefits:
+- Clear step-by-step processing
+- Each step is independent and testable
+- Easy to add new steps
+- Better error handling
+- State management through pipeline object
 
-## Dependencies
-- google-genai: AI/LLM integration
-- pydantic: Data validation
-- python-dotenv: Configuration
-- pillow: Image processing
-- pdf2image: PDF handling
-- PyPDF2: PDF metadata
-- watchdog: File system monitoring
-- PyYAML: Configuration files
-- pytest: Testing framework
+## Asset Pattern
+Asset class serves as a temporary file container:
+- Holds original file path
+- Manages temporary processed content
+- Tracks file type and MIME type
+- Used for file operations
+
+## Factory Pattern
+Document handlers use factory pattern:
+- BaseDocumentHandler defines interface
+- Concrete handlers for each file type
+- Factory method selects appropriate handler
+
+## Strategy Pattern
+Document categorization uses strategy pattern:
+- Different LLM providers can be swapped
+- Common interface for all providers
+- Each provider implements its own categorization logic
+
+## Observer Pattern
+File system watching uses observer pattern:
+- Watcher observes directory for changes
+- Notifies processor when files are added
+- Processor handles file processing asynchronously
+
+## Data Flow
+1. File Detection
+   - Watcher observes file system
+   - New files trigger processing
+
+2. Content Extraction
+   - Factory creates appropriate handler
+   - Handler processes file content
+   - Creates temporary files as needed
+
+3. Categorization
+   - API analyzes content
+   - Returns metadata and category
+   - Pipeline stores results
+
+4. File Organization
+   - Creates category directories
+   - Handles duplicates
+   - Moves files to final location
+
+## Error Handling
+- Each pipeline step can fail independently
+- Errors are logged and contained
+- Pipeline continues processing other files
+- Temporary files cleaned up on failure
+
+## Testing Strategy
+- Unit tests for each component
+- Integration tests for pipeline
+- Mock responses for API calls
+- Test fixtures for file operations

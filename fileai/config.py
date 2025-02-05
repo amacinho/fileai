@@ -68,32 +68,6 @@ def save_config(config):
         logging.error(f"Error saving config file: {e}")
         raise
 
-# Define constants
-SUPPORTED_IMAGE_EXTENSIONS = {
-    ".jpg",
-    ".jpeg",
-    ".png",
-    ".gif",
-    ".bmp",
-    ".tiff",
-    ".tif",
-    ".webp",
-    ".heic",
-}
-SUPPORTED_TEXT_EXTENSIONS = {
-    ".txt",
-    ".md",
-    ".csv",
-    ".json",
-    ".xml",
-    ".html",
-    ".log",
-    ".yaml",
-    ".yml",
-}
-SUPPORTED_DOC_EXTENSIONS = {".docx", ".doc", ".xls", ".xlsx", ".ppt", ".pptx"}
-# File extensions are now handled by the file handler registry
-
 # Folder configuration - tuples of (folder_name, description)
 FOLDERS = [
     ("medical", "Medical documents, prescriptions, treatment records"),
@@ -112,48 +86,7 @@ FOLDERS = [
     ("government-us", "USA Government-issued documents, IDs, passports"),
     ("visa-immigration", "Any visa/immigration related document that doesn't fall under the government-XX folders"),
     ("legal", "Legal documents and contracts"),
-    ("misc", "Miscellaneous uncategorized documents"),
-]
-
-class Asset:
-    """Image/Doc or PDF asset to be processed."""
-
-    def __init__(self, path: Path = None, file_type: str = None, temp_path: Path = None):
-        """Initialize asset with path, type, and optional temp_path."""
-        if path:
-            self.path = path
-            self.type = self._determine_type()
-        else:
-            self.path = None
-            self.type = file_type
-        self.temp_path = temp_path
-        self.target_path: Optional[Path] = None
-
-    def _determine_type(self):
-        if not self.path:
-            return None
-        extension = self.path.suffix
-        if extension in SUPPORTED_IMAGE_EXTENSIONS:
-            return "image"
-        elif extension == ".pdf":
-            return "pdf"
-        elif extension in SUPPORTED_TEXT_EXTENSIONS:
-            return "text"
-        elif extension in {".docx", ".doc", ".ppt", ".pptx"}:
-            return "doc"
-        elif extension in {".xls", ".xlsx"}:
-            return "spreadsheet"
-        return None
-
-    @classmethod
-    def get_supported_extensions(cls):
-        """Return all supported file extensions"""
-        return (
-            SUPPORTED_IMAGE_EXTENSIONS
-            | SUPPORTED_TEXT_EXTENSIONS
-            | SUPPORTED_DOC_EXTENSIONS
-            | {".pdf"}
-        )
+    ("misc", "Miscellaneous uncategorized documents"),]
 
 PROMPT = """
 Document Naming Assistant Task

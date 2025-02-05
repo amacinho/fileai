@@ -64,13 +64,13 @@ def test_text_handler(test_files_dir):
     # Test successful processing
     with patch("tempfile.NamedTemporaryFile") as mock_tempfile:
         mock_file = mock_tempfile.return_value.__enter__.return_value
-        mock_file.name = str(Path("mock_temp_path"))
+        mock_file.name = "/tmp/mock_temp_path"
         asset = TextHandler.process(text_file)
         
         # Verify asset
         assert asset is not None
         assert asset.type == "text"
-        assert asset.temp_path == Path("mock_temp_path")
+        assert asset.temp_path == Path("/tmp/mock_temp_path")
         
         # Verify temp file content
         with patch("builtins.open", mock_open()) as mock_open_file:
@@ -92,7 +92,7 @@ def test_image_handler(test_files_dir):
          patch("PIL.Image.open") as mock_image:
         # Mock temp file
         mock_file = mock_tempfile.return_value.__enter__.return_value
-        mock_file.name = str(Path("mock_temp_path"))
+        mock_file.name = "/tmp/mock_temp_path"
         
         # Mock image operations
         mock_img = mock_image.return_value.__enter__.return_value
@@ -105,75 +105,58 @@ def test_image_handler(test_files_dir):
         # Verify asset
         assert asset is not None
         assert asset.type == "image"
-        assert asset.temp_path == Path("mock_temp_path")
+        assert asset.temp_path == Path("/tmp/mock_temp_path")
         
         # Verify image operations
         mock_img.thumbnail.assert_called_once_with((1024, 1024), Image.Resampling.LANCZOS)
-        mock_img.save.assert_called_once_with(Path("mock_temp_path"), format="PNG")
+        mock_img.save.assert_called_once_with(Path("/tmp/mock_temp_path"), format="PNG")
     
-    # Test error handling with invalid image
-    invalid_img = test_files_dir / "invalid.png"
-    invalid_img.write_text("Not an image")
-    asset = ImageHandler.process(invalid_img)
-    assert asset is None
+        # Test error handling with invalid image
+        invalid_img = test_files_dir / "invalid.png"
+        invalid_img.write_text("Not an image")
+        asset = ImageHandler.process(invalid_img)
+        assert asset is None
 
+
+import shutil
 
 def test_doc_handler(test_files_dir):
     """Test DocHandler functionality."""
     doc_file = test_files_dir / "doc1.docx"
-    expected_text = "Test document content"
-    
+
     with patch("tempfile.NamedTemporaryFile") as mock_tempfile, \
-         patch("docx.Document") as mock_docx:
+            patch("shutil.copy2") as mock_copy:
         # Mock temp file
         mock_file = mock_tempfile.return_value.__enter__.return_value
-        mock_file.name = str(Path("mock_temp_path"))
-        
-        # Mock docx content
-        mock_doc = mock_docx.return_value
-        mock_doc.paragraphs = [Mock(text=expected_text)]
-        
+        mock_file.name = "/tmp/mock_temp_path"
+
         # Process document
-        asset = DocHandler.process(doc_file)
-        
-        # Verify asset
-        assert asset is not None
-        assert asset.type == "doc"
-        assert asset.temp_path == Path("mock_temp_path")
-        
-        # Verify temp file content
-        with patch("builtins.open", mock_open()) as mock_open_file:
-            DocHandler.process(doc_file)
-            mock_open_file.return_value.write.assert_called_once_with(expected_text)
+        temp_path = DocHandler.process(doc_file)
+
+        # Verify temp file was created
+        assert temp_path == Path("/tmp/mock_temp_path")
+
+        # Verify file was copied
+        mock_copy.assert_called_once_with(doc_file, Path("/tmp/mock_temp_path"))
 
 def test_xlsx_handler(test_files_dir):
     """Test XlsxHandler functionality."""
     xlsx_file = test_files_dir / "doc1.xlsx"
-    expected_text = "Test spreadsheet content"
-    
+
     with patch("tempfile.NamedTemporaryFile") as mock_tempfile, \
-         patch("pandas.read_excel") as mock_read_excel:
+            patch("shutil.copy2") as mock_copy:
         # Mock temp file
         mock_file = mock_tempfile.return_value.__enter__.return_value
-        mock_file.name = str(Path("mock_temp_path"))
-        
-        # Mock pandas DataFrame
-        mock_df = Mock()
-        mock_df.to_string.return_value = expected_text
-        mock_read_excel.return_value = mock_df
-        
-        # Process spreadsheet
-        asset = XlsxHandler.process(xlsx_file)
-        
-        # Verify asset
-        assert asset is not None
-        assert asset.type == "spreadsheet"
-        assert asset.temp_path == Path("mock_temp_path")
-        
-        # Verify temp file content
-        with patch("builtins.open", mock_open()) as mock_open_file:
-            XlsxHandler.process(xlsx_file)
-            mock_open_file.return_value.write.assert_called_once_with(expected_text)
+        mock_file.name = "/tmp/mock_temp_path"
+
+        # Process document
+        temp_path = XlsxHandler.process(xlsx_file)
+
+        # Verify temp file was created
+        assert temp_path == Path("/tmp/mock_temp_path")
+
+        # Verify file was copied
+        mock_copy.assert_called_once_with(xlsx_file, Path("/tmp/mock_temp_path"))
 
 def test_pdf_handler(test_files_dir):
     """Test PdfHandler functionality."""

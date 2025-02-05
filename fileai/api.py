@@ -4,12 +4,13 @@ from abc import ABC, abstractmethod
 from google import genai
 from google.genai import types
 from fileai.rate_limiter import RateLimiter
-from fileai.content_adapter import ContentAdapter
 from fileai.config import load_config, save_config, FOLDERS
 from pydantic import BaseModel
 import json
 import enum
 import mimetypes
+from fileai.document_handlers import get_handler
+from pathlib import Path
 
 # Dynamically create Folder enum from config
 Folder = enum.Enum(
@@ -36,17 +37,11 @@ class LLMAPI(ABC):
         pass
 
     @abstractmethod
-    def process_content_with_llm(self, prompt, content="", asset=None):
+    def get_response(self, prompt:str, path: Path) -> dict:
         pass
 
     def get_model_name(self):
         return self.__class__.__name__
-    
-    def _get_mimetype(self, filename):
-        # Use mimetypes.guess_type to get the MIME type
-        mime_type, _ = mimetypes.guess_type(filename)
-        return mime_type or "application/octet-stream"
-
 
 class GeminiAPI(LLMAPI):
     def __init__(self, api_key=None, model=None):
@@ -88,44 +83,27 @@ class GeminiAPI(LLMAPI):
                 save_config(new_config)
             except Exception as e:
                 logging.warning(f"Could not save configuration: {e}")
-        
-        self.rate_limiter = RateLimiter(max_calls=14, time_window=60)
-        self.content_adapter = ContentAdapter(self.client)
 
-    def _upload_content(self, asset):
-        file_upload = self.client.files.upload(path=asset.temp_path)
+        self.rate_limiter = RateLimiter(max_calls=14, time_window=60)
+
+    def _upload(self, path: Path) -> types.Content:
+        file_upload = self.client.files.upload(path=path)
         return types.Content(
             role="user",
             parts=[
-                types.Part.from_uri(file_uri=file_upload.uri, mime_type=self._get_mimetype(asset.temp_path))
+                types.Part.from_uri(
+                    file_uri=file_upload.uri, mime_type=mimetypes.guess_type(str(path))[0]
+                )
             ],
         )
 
-    def _prepare_contents(self, prompt, content="", asset=None):
-        contents = []
-        all_temp_files = []
+    def _prepare_contents(self, prompt, path: Path) -> list[types.Content]:
+        upload_content = self._upload(path=path)        
+        prompt_content = types.Content(role="user", parts=[types.Part.from_text(prompt)])
+        return [upload_content, prompt_content]
 
-        # Process media if present
-        if asset:
-            asset, temp_files = self.content_adapter.adapt_content(asset)
-            if asset:
-                uploaded_content = self._upload_content(asset)
-                contents.append(uploaded_content)
-                all_temp_files.extend(temp_files)
-
-        if content:
-            contents.append(
-                types.Content(role="user", parts=[types.Part.from_text(content)])
-            )
-
-        contents.append(
-            types.Content(role="user", parts=[types.Part.from_text(prompt)])
-        )
-
-        return contents, all_temp_files
-
-    def process_content_with_llm(self, prompt, content="", asset=None):
-        contents, all_temp_files = self._prepare_contents(prompt, content, asset)
+    def get_response(self, prompt: str, path: Path) -> dict:
+        contents = self._prepare_contents(prompt, path)
         self.rate_limiter.wait_if_needed()
         try:
             # Define the response schema explicitly
@@ -156,11 +134,10 @@ class GeminiAPI(LLMAPI):
         except Exception as err:
             raise Exception(f"Gemini API error: {str(err)}")
         finally:
-            # Clean up temporary files
-            for temp_file in all_temp_files:
-                try:
-                    os.unlink(temp_file)
-                except Exception as e:
-                    logging.error(
-                        f"Error cleaning up temporary file {temp_file}: {str(e)}"
-                    )
+            # Clean up temporary file
+            try:
+                os.unlink(path)
+            except Exception as e:
+                logging.error(
+                    f"Error cleaning up temporary file {path}: {str(e)}"
+                )

@@ -11,20 +11,19 @@ class DocumentCategorizer:
     def __init__(self, api):
         self.api = api
 
-    def categorize_document(self, options: dict) -> Tuple[str, str]:
+    def categorize_document(self, path: Path) -> Tuple[str, str]:
         """
         Categorize a document using AI and generate appropriate name.
         Returns: (filename, category)
         """
         prompt = PROMPT.format(
-            relative_file_path=options.get("relative_file_path", ""),
+            relative_file_path=path,
             folders_list=generate_folders_list()
         )
         
-        response = self.api.process_content_with_llm(
+        response = self.api.get_response(
             prompt=prompt,
-            content=options.get("content", ""),
-            asset=options.get("asset", []),
+            path=path
         )
 
         owner = response["doc_owner"]

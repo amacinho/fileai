@@ -64,8 +64,8 @@ class WatcherStressTest(unittest.TestCase):
         self.png_base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z/C/HgAGgwJ/lK3Q6wAAAABJRU5ErkJggg=="
         
         mock_response = Mock()
-        def mock_categorization_response(options):
-            filename, folder = get_filename_and_folder_from_relative_path(options.get("relative_file_path", ""))
+        def mock_categorization_response(path):
+            filename, folder = get_filename_and_folder_from_relative_path(path)
             return json.dumps({
                 "doc_type": "invoice",
                 "doc_date": "2016-01-01",
@@ -75,7 +75,7 @@ class WatcherStressTest(unittest.TestCase):
                 "doc_keywords": ["car", "insurance", "invoice", "payment"]
             })
         mock_response = Mock()
-        mock_response.text = lambda options: mock_categorization_response(options)
+        mock_response.text = mock_categorization_response(path)
         
         # Initialize API with mocks
         self.api = GeminiAPI()
@@ -152,8 +152,8 @@ class WatcherStressTest(unittest.TestCase):
 
     def test_watcher_stress_test(self):
         # Mock file categorization to provide unique and deterministic values
-        def unique_categorization(options) -> tuple[str, str]:
-            relative_file_path = Path(options.get("relative_file_path", ""))
+        def unique_categorization(path) -> tuple[str, str]:
+            relative_file_path = path.relative_to(self.watch_dir)
             filename, folder = get_filename_and_folder_from_relative_path(relative_file_path)
             return filename, folder
 

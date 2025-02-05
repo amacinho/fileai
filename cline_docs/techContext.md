@@ -1,127 +1,107 @@
 # Technical Context
 
-## Development Environment
+## Architecture Overview
+The system uses a pipeline-based architecture for document processing:
 
-### System Requirements
-- Operating System: Linux
-- Python Version: 3.12+
-- Shell: bash
+1. Document Pipeline
+   - Core processing logic
+   - Step-by-step document handling
+   - State management
+   - Error handling
 
-### Development Tools
-- VSCode as primary IDE
-- pytest for testing
-- git for version control
+2. Asset Management
+   - Temporary file handling
+   - File type detection
+   - MIME type management
 
-## Project Setup
+3. Document Handlers
+   - File type specific processing
+   - Content extraction
+   - Format conversion
 
-### Installation
-```bash
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate
+4. API Integration
+   - LLM provider integration
+   - Document categorization
+   - Metadata extraction
 
-# Install dependencies
-pip install -r requirements.txt
-```
+## Technologies Used
 
-### Dependencies
-```
-google-genai     # AI/LLM integration
-pdfplumber      # PDF text extraction
-pillow          # Image processing
-python-dotenv   # Environment configuration
-watchdog        # File system monitoring
-PyYAML          # YAML file handling
-pytest          # Testing framework
-python-docx     # Word document handling
-pandas          # Excel file handling
-openpyxl        # Required by pandas for Excel support
-```
+### Core System
+- Python 3.12+
+- pathlib for file operations
+- logging for error tracking
+
+### Document Processing
+- pdfplumber for PDF handling
+- python-docx for Word documents
+- Pillow for image processing
+- pandas for spreadsheet handling
+
+### API Integration
+- Gemini API for document analysis
+- Rate limiting for API calls
+- JSON for response handling
+
+### Testing
+- pytest for unit testing
+- unittest.mock for mocking
+- Test fixtures for file operations
+
+## Development Setup
+1. Python virtual environment
+2. Required dependencies from requirements.txt
+3. API keys configured in .env or config file
+4. Test fixtures in tests/fixtures/
 
 ## Technical Constraints
+1. File Operations
+   - Must handle large files efficiently
+   - Need to manage temporary files
+   - Must handle concurrent access
 
-### File System
-- Must handle various file systems (ext4, NTFS)
-- Handle file permission issues gracefully
-- Support for symbolic links
-- Case-sensitive path handling
+2. API Usage
+   - Rate limiting requirements
+   - Response format standardization
+   - Error handling for API failures
 
-### Security
-- No sensitive file reading (.env, secrets, .pem)
-- Use environment variables for credentials
-- Keep API keys out of logs
-- Secure file handling practices
+3. Document Processing
+   - Memory efficient processing
+   - Support for multiple file formats
+   - Proper cleanup of temporary files
 
-### Performance
-- Rate limiting for API calls
-- Streamlined file operations
-- Minimal memory footprint
-- Basic file handling
+4. Testing
+   - Mock responses for API calls
+   - Test fixtures for file operations
+   - Coverage for error cases
 
-### Error Handling
-- Comprehensive error logging
-- Clear error messages
-- Proper exception handling
-- Graceful degradation
+## Performance Considerations
+1. File Processing
+   - Efficient content extraction
+   - Proper resource cleanup
+   - Memory management
 
-## Testing Requirements
+2. API Calls
+   - Rate limiting
+   - Response caching
+   - Error recovery
 
-### Unit Tests
-- Mock external dependencies
-- Use pytest fixtures
-- Focus on component isolation
-- Proper patching techniques
+3. Pipeline Operations
+   - Step isolation
+   - State management
+   - Error containment
 
-### Integration Tests
-- File system operations
-- API integration testing
-- Document processing flow
-- Cross-component testing
+## Security Considerations
+1. File Access
+   - Safe file operations
+   - Permission management
+   - Path validation
 
-### Test Data
-- Test fixtures in YAML format
-- Sample files for each type
-- Edge case scenarios
-- Stress test data
+2. API Security
+   - Key management
+   - Secure communication
+   - Response validation
 
-## Documentation Standards
-
-### Code Documentation
-- Clear docstrings
-- Type hints
-- Consistent naming
-- Informative comments
-
-### Project Documentation
-- Memory Bank maintenance
-- Test documentation
-- Architecture decisions
-- Change tracking
-
-## Monitoring and Logging
-
-### Logging
-- Structured logging
-- Multiple log levels
-- Contextual information
-- Error tracking
-
-### Monitoring
-- API limit tracking
-- File operation monitoring
-- Error detection
-- Performance metrics
-
-## Future Considerations
-
-### Scalability
-- Handle increasing file volumes
-- Support for more file types
-- Performance optimization
-- Resource management
-
-### Maintenance
-- Regular dependency updates
-- Security patches
-- Performance tuning
-- Code cleanup
+3. Data Protection
+   - Temporary file cleanup
+   - Secure file storage
+   - Access control

@@ -1,32 +1,38 @@
 # Active Context
 
 ## Current Task
-Refactoring document handlers and content adapter.
+Refactoring the document processing pipeline to improve the way Asset is used for transferring information between components.
 
 ## Recent Changes
-1. Removed content_adapter.py and moved functionality into handlers
-2. Updated Asset class with temp_path attribute
-3. Modified document handlers to:
-   - Create and manage temporary files
-   - Use Path objects consistently
-   - Remove text return value
-4. Updated tests with:
-   - Proper mocking of dependencies
-   - Content verification
-   - Path object usage
+1. Created a new DocumentPipeline class to replace the rigid Asset-based approach
+   - Implements a clear step-by-step pipeline pattern
+   - Each step returns the pipeline object for method chaining
+   - Better error handling and state management
+   - Explicit success/failure states
 
-## Current Status
-1. Code changes are complete
-2. Tests have been updated
-3. Need to run tests to verify changes
+2. Updated pipeline test to use a temporary directory for input files
+   - Prevents direct use of fixture input folder
+   - Improves test isolation and cleanliness
+
+2. Pipeline Steps:
+   - extract_content: Gets content from document using appropriate handler
+   - categorize: Uses API to determine document category and metadata
+   - move_to_destination: Handles file movement and duplicate detection
+
+3. Improved Asset Usage:
+   - Asset is now used primarily for temporary file handling
+   - Document metadata (type, date, topic, owner, etc.) stored in pipeline
+   - Clearer separation between file operations and metadata
+
+4. Testing Improvements:
+   - Added comprehensive pipeline tests
+   - Mock responses match actual API response format
+   - Better test coverage for error cases
 
 ## Next Steps
-1. Run tests to verify all changes work correctly
-2. Fix any test failures that arise
-3. Consider updating other components that might be affected by the changes
+1. Fix the bug in ensureUniquePath because it doesn't check for hash identity while iterating
 
-## Future Improvements
-1. Consider adding error recovery for temporary files
-2. Add cleanup mechanism for temporary files
-3. Consider caching for frequently processed files
-4. Add more comprehensive end-to-end tests
+## Current Status
+- Basic pipeline functionality working
+- Tests passing
+- Successfully handling document processing workflow

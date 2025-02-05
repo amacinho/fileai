@@ -1,6 +1,6 @@
 import unittest
 import tempfile
-from unittest.mock import Mock, patch, mock_open, call
+from unittest.mock import Mock, patch, call
 import sys
 import os # Import os module
 from pathlib import Path
@@ -9,8 +9,8 @@ from pathlib import Path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fileai.document_processor import DocumentProcessor
-from fileai.document_handlers import get_handler, BaseDocumentHandler
-from fileai.filesystem_manager import FileSystemManager
+from fileai.document_handlers import BaseDocumentHandler
+from fileai.file_operator import FileOperator
 from fileai.directory_manager import DirectoryManager
 from fileai.document_categorizer import DocumentCategorizer
 from fileai.api import GeminiAPI
@@ -27,7 +27,7 @@ class TestDocumentProcessor(unittest.TestCase):
         self.processor = DocumentProcessor(self.input_path, self.output_path, self.mock_api)
 
         # Mock the component classes
-        self.processor.fs_manager = Mock(spec=FileSystemManager)
+        self.processor.fs_manager = Mock(spec=FileOperator)
         self.processor.dir_manager = Mock(spec=DirectoryManager)
         self.processor.categorizer = Mock(spec=DocumentCategorizer)
 

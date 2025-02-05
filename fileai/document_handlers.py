@@ -1,13 +1,16 @@
-import io
 import logging
 from pathlib import Path
 from typing import Optional
-import pandas as pd
-from docx import Document as DocxDocument
-import pdfplumber
+from PyPDF2 import PdfReader, PdfWriter
 from PIL import Image
+import shutil
+logging.getLogger("PIL").setLevel(logging.INFO)
 
-from fileai.config import Asset
+SUPPORTED_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".tif", ".webp", ".heic"]
+SUPPORTED_DOCUMENT_EXTENSIONS = [".docx", ".doc", ".odt"] 
+SUPPPORTED_SPREADSHEET_EXTENSIONS = [".xlsx", ".xls"]
+SUPPORTED_TEXT_EXTENSIONS = [".txt", ".csv", ".tsv", ".md", ".html", ".xml", ".json", ".yaml", ".yml", ".rtf"]
+SUPPORTED_PDF_EXTENSIONS = [".pdf"]
 
 class BaseDocumentHandler:
     """Base class for document handlers"""
@@ -19,18 +22,24 @@ class BaseDocumentHandler:
         return ext.lower() in cls.supported_extensions
     
     @classmethod
-    def process(cls, file_path: Path) -> Optional[Asset]:
+    def process(cls, file_path: Path) -> Optional[Path]:
+
         raise NotImplementedError
 
     @classmethod
     def create_temp_file(cls, suffix: str) -> Path:
         """Create a temporary file with the given suffix.
         
+        This is a utility method used by handlers to create temporary files
+        for storing processed content. The temporary file will be used by
+        the pipeline for further processing (e.g., categorization).
+        
         Args:
-            suffix: The file extension for the temporary file
+            suffix: The file extension for the temporary file (e.g., '.txt', '.png')
             
         Returns:
-            Path to the temporary file
+            Path to the created temporary file. The caller is responsible for
+            cleaning up this file when it's no longer needed.
         """
         import tempfile
         temp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
@@ -38,126 +47,97 @@ class BaseDocumentHandler:
 
 class ImageHandler(BaseDocumentHandler):
     """Handles image file processing and metadata extraction"""
-    supported_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.tif', '.webp']
+    supported_extensions = SUPPORTED_IMAGE_EXTENSIONS
     file_type = "image"
     
     @classmethod
-    def process(cls, file_path: Path) -> Optional[Asset]:
+    def process(cls, file_path: Path) -> Optional[Path]:
+        temporary_path = None
         try:
             # Open and resize image
             with Image.open(file_path) as img:
-                # Create temp file
-                temp_path = cls.create_temp_file('.png')
-                # Resize image to 1024x1024 max
+                temporary_path = cls.create_temp_file('.png')
                 img.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
-                # Save to temp file
-                img.save(temp_path, format="PNG")
-                # Create asset with temp path
-                return Asset(path=file_path, file_type=cls.file_type, temp_path=temp_path)
+                img.save(temporary_path, format="PNG")
+                return temporary_path
         except Exception as e:
             logging.error(f"Error processing image {file_path}: {e}")
-            logging.error(f"ImageHandler: file_path: {file_path}") # Log file_path
-            logging.error(f"Exception type: {type(e)}") # Log exception type
-            logging.error(f"Exception message: {e}") # Log exception message
-            return None
+            raise e
 
 class DocHandler(BaseDocumentHandler):
     """Handles Microsoft Word document processing"""
-    supported_extensions = ['.doc', '.docx']
+    supported_extensions = SUPPORTED_DOCUMENT_EXTENSIONS
     file_type = "document"
     
     @classmethod
-    def process(cls, file_path: Path) -> Optional[Asset]:
+    def process(cls, file_path: Path) -> Optional[Path]:
+        temporary_path = None
         try:
-            # Extract text from document
-            doc = DocxDocument(file_path)
-            text = "\n".join([para.text for para in doc.paragraphs])
-            
-            # Create temp file and write content
-            temp_path = cls.create_temp_file('.txt')
-            with open(temp_path, 'w') as f:
-                f.write(text)
-            
-            # Create asset with temp path
-            return Asset(path=file_path, file_type=cls.file_type, temp_path=temp_path)
-            
+            temporary_path = cls.create_temp_file(file_path.suffix)
+            shutil.copy2(file_path, temporary_path)
+            return temporary_path
         except Exception as e:
             logging.error(f"Error processing Word document {file_path}: {e}")
-            return None
-
+            raise e
 class XlsxHandler(BaseDocumentHandler):
     """Handles Excel spreadsheet processing"""
-    supported_extensions = ['.xlsx']
+    supported_extensions = SUPPPORTED_SPREADSHEET_EXTENSIONS
     file_type = "spreadsheet"
-    
+
     @classmethod
-    def process(cls, file_path: Path) -> Optional[Asset]:
+    def process(cls, file_path: Path) -> Optional[Path]:
+        temporary_path = None
         try:
-            # Read Excel file and convert to string
-            df = pd.read_excel(file_path, sheet_name=0)
-            text = df.to_string()
-            logging.info(f"Converted DataFrame to string. Text length: {len(text) if text else 0}")
-            
-            # Create temp file and write content
-            temp_path = cls.create_temp_file('.txt')
-            with open(temp_path, 'w') as f:
-                f.write(text)
-            
-            # Create asset with temp path
-            return Asset(path=file_path, file_type=cls.file_type, temp_path=temp_path)
-            
+            temporary_path = cls.create_temp_file(file_path.suffix)
+            shutil.copy2(file_path, temporary_path)
+            return temporary_path
         except Exception as e:
             logging.error(f"Error processing Excel file {file_path}: {e}")
-            logging.error(f"Exception type: {type(e)}")
-            logging.error(f"Exception message: {str(e)}")
-            return None
+            raise e
+
 
 class PdfHandler(BaseDocumentHandler):
-    supported_extensions = ['.pdf']
+    supported_extensions = SUPPORTED_PDF_EXTENSIONS
     file_type = "pdf"
     
     @classmethod
-    def process(cls, file_path: Path) -> Optional[Asset]:
+    def process(cls, file_path: Path) -> Optional[Path]:
+        temporary_path = None
+        reader = PdfReader(file_path)
+        writer = PdfWriter()
         try:
             # Extract text from PDF
-            with pdfplumber.open(file_path) as pdf:
-                text = "\n".join([page.extract_text() for page in pdf.pages])
-            
-            # Create temp file and write content
-            temp_path = cls.create_temp_file('.txt')
-            with open(temp_path, 'w') as f:
-                f.write(text)
-            
-            # Create asset with temp path
-            return Asset(path=file_path, file_type=cls.file_type, temp_path=temp_path)
-            
+            # Add up to first two pages
+            for i in range(min(2, len(reader.pages))):
+                writer.add_page(reader.pages[i])
+            temporary_path = cls.create_temp_file('.pdf')
+            with open(temporary_path, "wb") as output_file:
+                writer.write(output_file)
+                return temporary_path
         except Exception as e:
             logging.error(f"Error processing PDF {file_path}: {e}")
             return None
 
 class TextHandler(BaseDocumentHandler):
     """Handles plain text file processing"""
-    supported_extensions = ['.txt', '.text', '.rtf', '.csv', '.tsv']
+    supported_extensions = SUPPORTED_TEXT_EXTENSIONS
     file_type = "text"
 
     @classmethod
-    def process(cls, file_path: Path) -> Optional[Asset]:
+    def process(cls, file_path: Path) -> Optional[Path]:
         try:
             # Read original file
             with open(file_path, 'r') as f:
                 text = f.read()
             
             # Create temp file and write content
-            temp_path = cls.create_temp_file(file_path.suffix)
-            with open(temp_path, 'w') as f:
+            temporary_path = cls.create_temp_file(file_path.suffix)
+            with open(temporary_path, 'w') as f:
                 f.write(text)
-            
-            # Create asset with temp path
-            return Asset(path=file_path, file_type=cls.file_type, temp_path=temp_path)
-            
+                return temporary_path 
         except Exception as e:
             logging.error(f"Error processing text file {file_path}: {e}")
-            return None
+            raise e
 
 def get_handler(extension: str) -> Optional[type[BaseDocumentHandler]]:
     """Factory function to get the appropriate handler class for a file extension.
@@ -165,6 +145,14 @@ def get_handler(extension: str) -> Optional[type[BaseDocumentHandler]]:
     This follows the Factory Pattern where the factory returns handler classes rather than instances.
     The returned class can then be used to call class methods like process() or create instances
     if needed.
+    
+    This is typically used by the DocumentPipeline in its extract_content phase to get
+    the appropriate handler for processing a document.
+    
+    Example:
+        handler = get_handler('.pdf')
+        if handler:
+            asset = handler.process(file_path)
     
     Args:
         extension: The file extension to get a handler for (e.g. '.pdf', '.jpg')

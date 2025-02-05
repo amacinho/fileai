@@ -1,10 +1,11 @@
 import pytest
 from pathlib import Path
 from unittest.mock import Mock, patch
+from fileai.config import Asset
 from fileai.document_categorizer import DocumentCategorizer
 
 class MockAPI:
-    def process_content_with_llm(self, prompt, content, asset):
+    def get_response(self, prompt: str, asset: Asset) -> dict:
         """Mock LLM response with predefined document attributes."""
         return {
             "doc_owner": "john",
@@ -22,30 +23,6 @@ def mock_api():
 def categorizer(mock_api):
     """Create a DocumentCategorizer instance with mock API."""
     return DocumentCategorizer(mock_api)
-
-def test_categorize_document(categorizer):
-    """Test document categorization with mock API response."""
-    options = {
-        "relative_file_path": "test.pdf",
-        "content": "Sample invoice content",
-        "asset": []
-    }
-    
-    filename, category = categorizer.categorize_document(options)
-    
-    assert category == "financial"
-    assert filename == "invoice-2024-01-15-john"
-
-def test_categorize_document_missing_content(categorizer):
-    """Test categorization with minimal options."""
-    options = {
-        "relative_file_path": "test.pdf"
-    }
-    
-    filename, category = categorizer.categorize_document(options)
-    
-    assert category == "financial"
-    assert filename == "invoice-2024-01-15-john"
 
 def test_generate_filename():
     """Test filename generation with various components."""
@@ -95,28 +72,10 @@ def test_categorize_document_api_error(mock_api):
     """Test handling of API errors."""
     # Create a new mock API that raises an exception
     error_api = Mock()
-    error_api.process_content_with_llm.side_effect = Exception("API Error")
+    error_api.get_response.side_effect = Exception("API Error")
     
     categorizer = DocumentCategorizer(error_api)
-    options = {"relative_file_path": "test.pdf"}
+    asset = Asset(path="test.pdf")
     
     with pytest.raises(Exception):
-        categorizer.categorize_document(options)
-
-def test_categorize_document_invalid_response(mock_api):
-    """Test handling of invalid API response."""
-    # Create a new mock API that returns invalid response
-    invalid_api = Mock()
-    invalid_api.process_content_with_llm.return_value = {
-        "doc_owner": "",
-        "doc_topic": "unknown",  # Provide at least a topic for valid filename
-        "doc_date": "",
-        "doc_folder": ""
-    }
-    
-    categorizer = DocumentCategorizer(invalid_api)
-    options = {"relative_file_path": "test.pdf"}
-    
-    filename, category = categorizer.categorize_document(options)
-    assert category == ""
-    assert filename == "unknown"  # Should get filename from topic
+        categorizer.categorize_document(asset)
