@@ -2,6 +2,9 @@ data/
 debug.log
 @eaDir/
 cline_docs/
+output/
+.clineignore
+.clinerules
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

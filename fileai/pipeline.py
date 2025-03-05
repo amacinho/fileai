@@ -65,7 +65,8 @@ class DocumentPipeline:
             raise ValueError("Cannot categorize document: temporary_path not set")
         
         filename, category = self.categorizer.categorize_document(
-            self.state.temporary_path
+            path=self.state.temporary_path,
+            original_path=self.state.original_path
         )
         if filename and category:
             self.state.filename = filename

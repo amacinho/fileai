@@ -11,7 +11,7 @@ class DocumentCategorizer:
     def __init__(self, api):
         self.api = api
 
-    def categorize_document(self, path: Path) -> Tuple[str, str]:
+    def categorize_document(self, path: Path, original_path: Path) -> Tuple[str, str]:
         """
         Categorize a document using AI and generate appropriate name.
         
@@ -21,7 +21,7 @@ class DocumentCategorizer:
         Returns: (filename, category)
         """
         prompt = PROMPT.format(
-            relative_file_path=path,
+            relative_file_path=original_path,
             folders_list=generate_folders_list()
         )
         

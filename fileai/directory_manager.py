@@ -39,11 +39,15 @@ class DirectoryManager:
                 break
 
     def _is_empty_dir(self, dir_path: Path) -> bool:
-        """Check if a directory is empty."""
+        """Check if a directory is empty, ignoring @eaDir folders.
+        A directory containing only @eaDir is considered empty."""
         if not dir_path.is_dir():
             return False
         try:
-            return not any(dir_path.iterdir())
+            return not any(
+                item for item in dir_path.iterdir()
+                if not (item.is_dir() and item.name == "@eaDir")
+            )
         except Exception:
             return False
 

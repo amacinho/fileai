@@ -55,6 +55,7 @@ class GeminiAPI(LLMAPI):
         
         # Load configuration
         config = load_config()
+        logging.debug(f"Loaded config: {config}")
         
         # API key precedence: constructor arg > config file > environment variable
         self.api_key = api_key or config.get('api_key')
