@@ -8,9 +8,15 @@ A Python package for organizing and renaming files using AI.
 git clone https://github.com/amacinho/fileai.git
 cd fileai
 pip install .
-mkdir -p ~/tmp/documents/categorized
-fileai --api-key <ADD YOUR GEMINI API KEY>  ~/tmp/documents ~/tmp/documents/categorized gemini --model gemini-1.5-flash
-# fileai will start processing ~/tmp/documents for new files and categorize them under ~/tmp/documents/categorized.
+export GEMINI_API_KEY=<ADD YOUR GEMINI API KEY>
+# Check for duplicate files in documents folder (using SHA256 hash of the content)
+fileai-dedupe --dry-run ~/tmp/documents
+# Actually dedupe files
+fileai-dedupe ~/tmp/documents
+
+# Categorize files in documents folder
+fileai-process  ~/tmp/documents ~/tmp/output gemini
+# fileai will start processing ~/tmp/documents for new files and categorize them under ~/tmp/output.
 ```
 
 ## Configuration
