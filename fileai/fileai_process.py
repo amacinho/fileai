@@ -2,7 +2,7 @@
 import argparse
 import logging
 from fileai.api import GeminiAPI
-from fileai.watcher import Watcher
+from fileai.processor import Processor
 from fileai.document_categorizer import DocumentCategorizer
 from fileai.config import get_config_file
 
@@ -38,10 +38,6 @@ def main():
     parser.add_argument(
         "api_type", choices=["gemini"], type=str.lower, help="LLM service to use"
     )
-    parser.add_argument(
-        "--monitor",
-        action="store_true",
-        help="Monitor the input folder for new files and process them in real-time. Monitoring starts after processing existing files. (optional, default=false)")
 
     parser.add_argument(
         "--api-key",
@@ -54,17 +50,10 @@ def main():
 
     api = create_api(args.api_type, api_key=args.api_key, model=args.model)
     document_categorizer = DocumentCategorizer(api)
-    watcher = Watcher(args.input_path, args.output_path, document_categorizer)
+    processor = Processor(args.input_path, args.output_path, document_categorizer)
     
     # First process existing files
-    watcher.process_existing_files()
-            
-    if args.monitor:
-        try:
-            # Then start monitoring for new files
-            watcher.start_monitoring()
-        except KeyboardInterrupt:
-            watcher.stop()
+    processor.process_existing_files()
 
 if __name__ == "__main__":
     main()

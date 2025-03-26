@@ -1,11 +1,11 @@
 import unittest
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 import tempfile
 import shutil
 
 from fileai.document_categorizer import DocumentCategorizer
-from fileai.file_operator import FileOperator
+from fileai.file_system_operator import FileSystemOperator
 from fileai.pipeline import DocumentPipeline
 
 class TestDocumentPipeline(unittest.TestCase):
@@ -34,8 +34,8 @@ class TestDocumentPipeline(unittest.TestCase):
 
     def test_pipeline_single_file(self):
         categorizer = DocumentCategorizer(self.api_mock)
-        file_operator = FileOperator(input_base_path=self.input_path, output_base_path=self.output_path, remove_input_files=True)
-        pipeline = DocumentPipeline(categorizer=categorizer, file_operator=file_operator)
+        file_system_operator = FileSystemOperator(input_base_path=self.input_path, output_base_path=self.output_path, remove_input_files=True)
+        pipeline = DocumentPipeline(categorizer=categorizer, file_system_operator=file_system_operator)
         supported_extensions = {'.doc', '.docx', '.html', '.pdf', '.txt', '.rtf'}
         for file in self.input_path.iterdir():
             if file.suffix not in supported_extensions:

@@ -70,22 +70,24 @@ def save_config(config):
 # Folder configuration - tuples of (folder_name, description)
 FOLDERS = [
     ("medical", "Medical documents, prescriptions, treatment records"),
-    ("financial", "Bank statements, invoices, payments, transfers"),
+    (
+        "financial",
+        "Bank statements, invoices, payments, transfers, tax returns, tax-related documents, Purchase receipts and invoices",
+    ),
     ("travel", "Travel itineraries, tickets, and reservations"),
     ("personal", "Personal documents and private files"),
-    ("technical", "Technical documentation and manuals"),
     ("car", "Car related documents, tickets, fines, insurance"),
     ("home", "Mortgage, rent, utilities, and home insurance"),
-    ("receipts", "Purchase receipts and invoices"),
     ("work", "Employment contracts, pay slips, work-related documents"),
     ("education", "School records, diplomas, certificates, transcripts, school forms"),
-    ("tax", "Tax returns, tax-related documents"),
-    ("government-it", "Italian Government-issued documents, IDs, passports"),
-    ("government-tr", "Turkish Government-issued documents, IDs, passports"),
-    ("government-us", "USA Government-issued documents, IDs, passports"),
-    ("visa-immigration", "Any visa/immigration related document that doesn't fall under the government-XX folders"),
+    ("government", "Government-issued documents, IDs, passports"),
+    (
+        "visa-immigration",
+        "Any visa/immigration related document that doesn't fall under the government folder",
+    ),
     ("legal", "Legal documents and contracts"),
-    ("misc", "Miscellaneous uncategorized documents"),]
+    ("misc", "Miscellaneous uncategorized documents"),
+]
 
 PROMPT = """
 Document Naming Assistant Task

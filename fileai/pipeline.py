@@ -5,7 +5,7 @@ from typing import Optional
 
 from fileai import document_handlers
 from fileai.document_categorizer import DocumentCategorizer
-from fileai.file_operator import FileOperator
+from fileai.file_system_operator import FileSystemOperator
 
 @dataclass
 class PipelineState:
@@ -26,9 +26,9 @@ class PipelineState:
         
 class DocumentPipeline:
     """Pipeline for processing documents through the complete workflow."""
-    def __init__(self, categorizer: DocumentCategorizer, file_operator: FileOperator):
+    def __init__(self, categorizer: DocumentCategorizer, file_system_operator: FileSystemOperator):
         self.categorizer = categorizer
-        self.file_operator = file_operator
+        self.file_system_operator = file_system_operator
     
     def process(self, file_path: Path) -> Path:
         """Process document through the complete pipeline."""
@@ -43,7 +43,7 @@ class DocumentPipeline:
         except Exception as e:
             logging.error(f"Failed to process file {file_path}: {e}")
             # Move failed file to unsupported
-            return self.file_operator.move_to_unsupported(file_path)
+            return self.file_system_operator.move_to_unsupported(file_path)
         finally:
             self.state = None
 
@@ -80,37 +80,37 @@ class DocumentPipeline:
         if not self.state.filename:
             raise ValueError("Cannot move document: filename not set")
         
-        category_path = self.file_operator.output_base_path / self.state.category
+        category_path = self.file_system_operator.output_base_path / self.state.category
         category_path.mkdir(parents=True, exist_ok=True)
         new_path = category_path / f"{self.state.filename}{self.state.original_path.suffix}"
         
         # Check for hash-based duplicates
-        existing_duplicate = self.file_operator.find_duplicate_by_hash(self.state.original_path)
+        existing_duplicate = self.file_system_operator.find_duplicate_by_hash(self.state.original_path)
         if existing_duplicate:
             # Create versioned filename starting with _v2
             base_name = f"{existing_duplicate.stem}_v2{existing_duplicate.suffix}"
             new_path = existing_duplicate.parent / base_name
-            new_path = self.file_operator.ensure_unique_path(new_path)
+            new_path = self.file_system_operator.ensure_unique_path(new_path)
             logging.info(f"Duplicate file found by hash, creating versioned copy: {new_path}")
         else:
             # Ensure unique filename
             if new_path.exists():
-                new_path = self.file_operator.ensure_unique_path(new_path)
+                new_path = self.file_system_operator.ensure_unique_path(new_path)
 
         # Copy file to destination
         try:
-            self.state.target_path = self.file_operator.copy_file(self.state.original_path, new_path)
+            self.state.target_path = self.file_system_operator.copy_file(self.state.original_path, new_path)
             # Update hash dictionary with the new file
-            self.file_operator._update_hash_dict(self.state.target_path)
+            self.file_system_operator._update_hash_dict(self.state.target_path)
         except OSError as e:
             logging.error(f"Failed to copy file: {e}")
             self.state.target_path = None
             return self
 
         # Remove original file only after successful copy
-        if self.file_operator.remove_input_files:
+        if self.file_system_operator.remove_input_files:
             try:
-                self.file_operator.remove_file(self.state.original_path)
+                self.file_system_operator.remove_file(self.state.original_path)
             except OSError as e:
                 logging.error(f"File copied, but failed to remove input file: {e}")
                 self.state.target_path = None

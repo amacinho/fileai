@@ -9,8 +9,8 @@ git clone https://github.com/amacinho/fileai.git
 cd fileai
 pip install .
 mkdir -p ~/tmp/documents/categorized
-fileai --api-key <ADD YOUR GEMINI API KEY> --monitor ~/tmp/documents ~/tmp/documents/categorized gemini --model gemini-1.5-flash
-# fileai will start monitoring ~/tmp/documents for new files and categorize them under ~/tmp/documents/categorized.
+fileai --api-key <ADD YOUR GEMINI API KEY>  ~/tmp/documents ~/tmp/documents/categorized gemini --model gemini-1.5-flash
+# fileai will start processing ~/tmp/documents for new files and categorize them under ~/tmp/documents/categorized.
 ```
 
 ## Configuration
@@ -57,8 +57,6 @@ fileai input_directory output_directory gemini --api-key your-api-key
 # With custom model
 fileai input_directory output_directory gemini --model gemini-pro-vision
 
-# Customize polling interval for file watching
-fileai input_directory output_directory gemini --poll-interval 30
 ```
 
 ### Python API

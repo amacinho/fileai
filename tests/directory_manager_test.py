@@ -1,6 +1,6 @@
 import pytest
 from pathlib import Path
-from fileai.directory_manager import DirectoryManager
+from fileai.file_system_operator import _DirectoryManager
 from fileai.config import FOLDERS
 
 @pytest.fixture
@@ -11,7 +11,7 @@ def temp_base_dir(tmp_path):
 @pytest.fixture
 def directory_manager(temp_base_dir):
     """Create a DirectoryManager instance with temporary base directory."""
-    return DirectoryManager(temp_base_dir)
+    return _DirectoryManager(temp_base_dir)
 
 def test_ensure_category_structure(directory_manager, temp_base_dir):
     """Test that ensure_category_structure creates all required directories."""
@@ -71,6 +71,38 @@ def test_is_empty_dir(directory_manager, temp_base_dir):
     assert directory_manager._is_empty_dir(empty_dir)
     assert not directory_manager._is_empty_dir(nonempty_dir)
     assert not directory_manager._is_empty_dir(temp_base_dir / "nonexistent")
+    
+    
+def test_is_empty_dir_with_empty_subdirs(directory_manager, temp_base_dir):
+    """Test that directory with empty subdirs is considered empty"""
+    parent_dir = temp_base_dir / "parent"
+    # child_dir is not empty because it contains a file
+    child_dir = parent_dir / "child" 
+    child_dir.mkdir(parents=True)
+    (child_dir / "file.txt").write_text("test content")
+    # Create an empty subdirectory unde child_dir
+    empty_subdir = child_dir / "empty_subdir"
+    empty_subdir.mkdir()
+    # Create another empty subdirectory under empty_subdir
+    another_empty_subdir = empty_subdir / "another_empty_subdir"
+    another_empty_subdir.mkdir()
+    
+    # a nested chain of directories weith a single file at the deepest level
+    deepest_subdir = parent_dir / "a" / "b" / "c"
+    deepest_subdir.mkdir(parents=True)
+    (deepest_subdir / "file.txt").write_text("test content")
+    
+
+    # parent is not empty
+    assert not directory_manager._is_empty_dir(parent_dir)  
+    assert not directory_manager._is_empty_dir(child_dir)  
+    assert directory_manager._is_empty_dir(empty_subdir)  
+    assert directory_manager._is_empty_dir(another_empty_subdir)
+    assert not directory_manager._is_empty_dir(parent_dir / "a" / "b")
+    assert not directory_manager._is_empty_dir(parent_dir / "a")
+    assert not directory_manager._is_empty_dir(deepest_subdir)
+    
+
 
 def test_get_relative_path(directory_manager, temp_base_dir):
     """Test get_relative_path returns correct relative paths."""

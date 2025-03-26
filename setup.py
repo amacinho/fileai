@@ -17,7 +17,8 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "fileai=fileai.main:main",
+            "fileai-process=fileai.fileai_process:main",
+            "fileai-dedupe=fileai.fileai_dedupe:main",
         ],
     },
     package_data={

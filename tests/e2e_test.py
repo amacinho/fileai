@@ -3,7 +3,7 @@ import shutil
 import subprocess
 from pathlib import Path
 import pytest
-from fileai.file_operator import FileOperator
+from fileai.file_system_operator import FileSystemOperator
 
 def print_directory_structure(path: Path, indent: int = 0):
     """Recursively print directory structure with indentation."""
@@ -22,9 +22,13 @@ def temp_input_dir(tmp_path):
     input_dir.mkdir()
     # Copy all files from fixtures/input to temporary input directory
     fixtures_dir = Path(__file__).parent / "fixtures" / "input"
-    for file_path in fixtures_dir.glob("*"):
-        if file_path.is_file():
-            shutil.copy2(file_path, input_dir)    
+    # Copy all contents (files and directories) from fixtures/input
+    for item in fixtures_dir.iterdir():
+        dest = input_dir / item.name
+        if item.is_dir():
+            shutil.copytree(item, dest)
+        else:
+            shutil.copy2(item, dest)    
     yield input_dir
     shutil.rmtree(input_dir)
 
@@ -39,9 +43,9 @@ def temp_output_dir(tmp_path):
 def test_end_to_end(temp_input_dir, temp_output_dir, request):
     """Test the complete file processing workflow."""
     project_root = Path(__file__).parent.parent
-    main_script = project_root / "fileai" / "main.py"
+    main_script = project_root / "fileai" / "fileai_process.py"
     print(f"Command to run fileai: python {main_script} {temp_input_dir} {temp_output_dir} gemini")
-    operator = FileOperator(temp_input_dir, temp_output_dir, "gemini")
+    operator = FileSystemOperator(temp_input_dir, temp_output_dir, "gemini")
     
     hash_to_file = {}
     supported_input_files = []
@@ -75,6 +79,8 @@ def test_end_to_end(temp_input_dir, temp_output_dir, request):
         env={**os.environ}
     )
     
+    
+
     # Print and check script execution
     print(f"Script stdout:\n{result.stdout}")
     print(f"Script stderr:\n{result.stderr}")

@@ -1,4 +1,3 @@
-import os
 import logging
 from abc import ABC, abstractmethod
 from google import genai
@@ -9,7 +8,6 @@ from pydantic import BaseModel
 import json
 import enum
 import mimetypes
-from fileai.document_handlers import get_handler
 from pathlib import Path
 
 # Dynamically create Folder enum from config
@@ -23,7 +21,7 @@ class Response(BaseModel):
     doc_date: str
     doc_topic: str
     doc_owner: str
-    doc_folder: str  # Changed from Folder to str since Gemini expects simple types
+    doc_folder: str 
     doc_keywords: list[str]
 
     def model_post_init(self, __context):

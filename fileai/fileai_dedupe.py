@@ -5,7 +5,7 @@ import os
 import sys
 from pathlib import Path
 
-from file_operator import FileOperator
+from fileai.file_system_operator import FileSystemOperator
 
 def format_size(size_bytes):
     """Format file size in a human-readable format."""
@@ -30,18 +30,18 @@ def dedupe_folder(folder_path, dry_run=False):
         print(f"Error: {folder_path} is not a valid directory")
         return 0, 0, 0, 0
     
-    # Create a FileOperator instance
-    file_operator = FileOperator(
+    # Create a FileSystemOperator instance
+    file_system_operator = FileSystemOperator(
         input_base_path=folder_path,  # Not used for deduplication
         output_base_path=folder_path,
         remove_input_files=False  # We'll handle removal ourselves
     )
     
     # Scan the folder to build hash dictionary
-    file_operator.scan_output_directory()
+    file_system_operator.scan_output_directory()
     
     # Get statistics
-    stats = file_operator.get_duplicate_stats()
+    stats = file_system_operator.get_duplicate_stats()
     total_files = stats['total_files']
     unique_files = stats['unique_files']
     duplicate_files = stats['duplicate_files']
@@ -58,7 +58,7 @@ def dedupe_folder(folder_path, dry_run=False):
     # Process duplicates
     if duplicate_groups > 0:
         print("\nDuplicate groups:")
-        for file_hash, paths in file_operator.file_hash_dict.items():
+        for file_hash, paths in file_system_operator.file_hash_dict.items():
             if len(paths) > 1:
                 # Get size of first file
                 try:
@@ -77,7 +77,7 @@ def dedupe_folder(folder_path, dry_run=False):
                             if not dry_run:
                                 try:
                                     os.remove(path)
-                                    print(f"      Removed!")
+                                    print("      Removed!")
                                     removed_files += 1
                                 except (FileNotFoundError, PermissionError, OSError) as e:
                                     print(f"      Error removing: {e}")
